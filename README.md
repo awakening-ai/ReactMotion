@@ -35,7 +35,7 @@
 
 ## Updates
 
-- \[2026.xx.xx\] Code released
+- \[2026.03.16\] Code released
 
 ## TLDR
 
