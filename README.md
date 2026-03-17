@@ -26,8 +26,12 @@
     <sup>5</sup>School of Computer Science, University of Nottingham, UK<br>
     <sup>*</sup>Equal contribution &nbsp; <sup>&dagger;</sup>Corresponding author
 </p>
-  <h2 align="center"><a href="https://reactmotion.github.io">Project Page</a> | <a href="https://www.youtube.com/watch?v=48jq_G1uU5s">Video</a></h2>
+  <h2 align="center"><a href="https://arxiv.org/pdf/2603.15083">Paper</a> |<h2 align="center"><a href="https://reactmotion.github.io">Project Page</a> | <a href="https://www.youtube.com/watch?v=48jq_G1uU5s">Video</a></h2>
 </p>
+
+
+
+
 
 [![Watch the video](https://img.youtube.com/vi/48jq_G1uU5s/maxresdefault.jpg)](https://www.youtube.com/watch?v=48jq_G1uU5s)
 
