@@ -214,7 +214,11 @@ python demo_inference.py \
   --out_path output/demo_text_meet.mp4
 ```
 
+
 The generated videos will be saved in `output/`, example shown below:
+
+https://github.com/user-attachments/assets/e0096715-f8b9-400c-8dd8-434d1e10c8d4
+
 
 <!-- TODO: add demo video/gif here -->
 <!-- <p align="center">
@@ -249,7 +253,6 @@ python demo_inference.py \
   --out_path output/demo_audio.mp4
 ```
 
-https://github.com/user-attachments/assets/e0096715-f8b9-400c-8dd8-434d1e10c8d4
 
 **Batch demo with shell script:**
 ```bash
