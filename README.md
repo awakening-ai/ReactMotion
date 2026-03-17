@@ -34,7 +34,7 @@
 *We introduce **Reactive Listener Motion Generation from Speaker Utterance** — a new task that generates naturalistic listener body motions appropriately responding to a speaker's utterance. Our unified framework **ReactMotion** jointly models text, audio, emotion, and motion with preference-based objectives, producing natural, diverse, and appropriate listener responses.*
 
 ## 📢 Updates
-
+- \[2026.??\] 🎮 **We will release the ReactMotionNet dataset on huggingface very soon** 
 - \[2026.03.17\] 🎮 **Inference Demo & Gradio UI** released
 - \[2026.03.16\] 🎯 **Full Training, Evaluation Code** released
 
