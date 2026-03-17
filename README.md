@@ -178,7 +178,7 @@ Our pretrained ReactMotion model is available on Hugging Face:
 | Model | Backbone | Conditioning | Link |
 |---|---|---|---|
 | **ReactMotion 1.0** | T5-base | Text + Audio + Emotion | [awakening-ai/ReactMotion1.0](https://huggingface.co/awakening-ai/ReactMotion1.0) |
-| **ReactMotion 2.0** | T5-base | Text + Audio + Emotion | [awakening-ai/ReactMotion1.0](https://huggingface.co/awakening-ai/awakening-ai/ReactMotion1.0-Joint-Training) |
+| **ReactMotion1.0 Joint-Training** | T5-base | Text + Audio + Emotion | [awakening-ai/ReactMotion1.0-Joint-Training](https://huggingface.co/awakening-ai/awakening-ai/ReactMotion1.0-Joint-Training) |
 
 Download via CLI:
 ```bash
