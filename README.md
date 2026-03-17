@@ -26,35 +26,32 @@
     <sup>5</sup>School of Computer Science, University of Nottingham, UK<br>
     <sup>*</sup>Equal contribution &nbsp; <sup>&dagger;</sup>Corresponding author
 </p>
-  <h2 align="center"><a href="https://arxiv.org/pdf/2603.15083">Paper</a> | <a href="https://reactmotion.github.io">Project Page</a> | <a href="https://www.youtube.com/watch?v=48jq_G1uU5s">Video</a></h2>
+  <h2 align="center"><a href="https://arxiv.org/pdf/2603.15083">Paper</a> | <a href="https://reactmotion.github.io">Project Page</a> | <a href="https://www.youtube.com/watch?v=48jq_G1uU5s">Video</a> | <a href="https://huggingface.co/awakening-ai/ReactMotion1.0">Hugging Face</a></h2>
 </p>
-
-
-
-
 
 [![Watch the video](https://img.youtube.com/vi/48jq_G1uU5s/maxresdefault.jpg)](https://www.youtube.com/watch?v=48jq_G1uU5s)
 
 *We introduce **Reactive Listener Motion Generation from Speaker Utterance** — a new task that generates naturalistic listener body motions appropriately responding to a speaker's utterance. Our unified framework **ReactMotion** jointly models text, audio, emotion, and motion with preference-based objectives, producing natural, diverse, and appropriate listener responses.*
 
-## Updates
+## 📢 Updates
 
-- \[2026.03.16\] Code released
+- \[2026.03.17\] 🎮 **Inference Demo & Gradio UI** released
+- \[2026.03.16\] 🎯 **Full Training, Evaluation Code** released
 
-## TLDR
+## 🚀 TLDR
 
 Modeling nonverbal listener behavior is challenging due to the inherently **non-deterministic** nature of human reactions — the same speaker utterance can elicit many appropriate listener responses.
 
+🔥 **ReactMotion** generates naturalistic listener body motions from speaker utterance (**text + audio + emotion**), trained with **preference-based ranking** on our **ReactMotionNet** dataset that captures the one-to-many nature of listener behavior.
+
 We present:
 
-- **ReactMotionNet** — A large-scale dataset pairing speaker utterances with multiple candidate listener motions annotated with varying degrees of appropriateness (gold/silver/negative), explicitly capturing the **one-to-many** nature of listener behavior
-- **ReactMotion** — A unified generative framework built on T5 that jointly models **text**, **audio**, **emotion**, and **motion**, trained with preference-based ranking objectives to encourage both appropriate and diverse listener responses
-- **JudgeNetwork** — A multi-modal contrastive scorer that ranks generated motion candidates via InfoNCE loss for **best-of-K selection**
-- **Preference-oriented evaluation protocols** tailored to assess reactive appropriateness, where conventional motion metrics fall short
+- **ReactMotionNet** — A large-scale dataset pairing speaker utterances with multiple candidate listener motions annotated with varying degrees of appropriateness (gold/silver/negative)
+- **ReactMotion** — A unified generative framework built on T5 that jointly models **text**, **audio**, **emotion**, and **motion**, trained with preference-based ranking objectives
+- **JudgeNetwork** — A multi-modal contrastive scorer for **best-of-K selection**
+- **Preference-oriented evaluation protocols** tailored to assess reactive appropriateness
 
-ReactMotion outperforms retrieval baselines and cascaded LLM-based pipelines, generating more natural, diverse, and appropriate listener motions.
-
-## Architecture
+## 🏗️ Architecture
 
 | Component | Backbone | Input | Output |
 |---|---|---|---|
@@ -72,7 +69,7 @@ ReactMotion outperforms retrieval baselines and cascaded LLM-based pipelines, ge
 | `t+a` | Text + Audio |
 | `t+a+e` | Text + Audio + Emotion (full) |
 
-## Installation
+## 🛠️ Installation
 
 ```bash
 conda create -n reactmotion python=3.11 -y
@@ -92,23 +89,66 @@ We use [wandb](https://wandb.ai) to log and visualize the training process:
 wandb login
 ```
 
-## Data Preparation
+## 📥 Pretrained Models & Evaluators
 
-Prepare the following data before training:
+Download the pretrained Motion VQ-VAE and evaluation models:
 
-**1. Motion VQ codes**
-
-Place motion VQ-VAE codes as `.npy` files under:
+```bash
+bash prepare/download_vqvae.sh
+bash prepare/download_evaluators.sh
 ```
-{DATASET_DIR}/HumanML3D/VQVAE/
+
+Once downloaded, your `external/` directory should look like:
+
+```
+external/
+├── pretrained_vqvae/
+│   └── t2m.pth                           # Motion VQ-VAE checkpoint
+└── t2m/
+    ├── Comp_v6_KLD005/                   # T2M evaluation model
+    ├── text_mot_match/                   # Text-motion matching model
+    └── VQVAEV3_CB1024_CMT_H1024_NRES3/
+        └── meta/
+            ├── mean.npy                  # Per-dim mean for normalization
+            └── std.npy                   # Per-dim std for normalization
+```
+
+## 📦 Data Preparation
+
+### HumanML3D Dataset
+
+We use the [HumanML3D](https://github.com/EricGuo5513/HumanML3D) 3D human motion-language dataset. Please follow the [HumanML3D instructions](https://github.com/EricGuo5513/HumanML3D) to download and prepare the dataset, then place it under the `dataset/` directory:
+
+```
+dataset/HumanML3D/
+├── new_joint_vecs/      # Joint feature vectors (263-dim)
+├── texts/               # Motion captions
+├── Mean.npy             # Per-dim mean for normalization
+├── Std.npy              # Per-dim std for normalization
+├── train.txt
+├── val.txt
+├── test.txt
+├── train_val.txt
+└── all.txt
+```
+
+### Motion VQ-VAE Codes
+
+Pre-encode the HumanML3D motions with the Motion VQ-VAE and place the codes as `.npy` files:
+```
+dataset/HumanML3D/VQVAE/
 ├── 000000.npy
 ├── 000001.npy
+├── M000000.npy
 └── ...
 ```
 
-**2. Audio codes**
+Each `.npy` file contains a 1D integer array of VQ codebook indices (codebook size = 512).
 
-Pre-encode audio with [Mimi](https://github.com/kyutai-labs/moshi) and place under:
+### Audio Codes
+
+Pre-encode speaker audio with [Mimi](https://github.com/kyutai-labs/moshi) (from the Moshi project). Mimi weights are **automatically downloaded** from HuggingFace on first use — no manual checkpoint needed.
+
 ```
 {AUDIO_CODE_DIR}/
 ├── audio_001.npz
@@ -116,7 +156,7 @@ Pre-encode audio with [Mimi](https://github.com/kyutai-labs/moshi) and place und
 └── ...
 ```
 
-**3. CSV splits**
+### CSV Splits
 
 Prepare `train.csv`, `val.csv`, `test.csv` with the following columns:
 
@@ -131,7 +171,120 @@ Prepare `train.csv`, `val.csv`, `test.csv` with the following columns:
 | `item_w` *(optional)* | Per-item weight |
 | `group_w` *(optional)* | Per-group weight |
 
-## Training
+## 🤗 Model Card
+
+Our pretrained ReactMotion model is available on Hugging Face:
+
+| Model | Backbone | Conditioning | Link |
+|---|---|---|---|
+| **ReactMotion 1.0** | T5-base | Text + Audio + Emotion | [awakening-ai/ReactMotion1.0](https://huggingface.co/awakening-ai/ReactMotion1.0) |
+| **ReactMotion 2.0** | T5-base | Text + Audio + Emotion | [awakening-ai/ReactMotion1.0](https://huggingface.co/awakening-ai/awakening-ai/ReactMotion1.0-Joint-Training) |
+
+Download via CLI:
+```bash
+# Install huggingface_hub if needed
+pip install huggingface_hub
+
+# Download the model
+huggingface-cli download awakening-ai/ReactMotion1.0 --local-dir models/ReactMotion1.0
+```
+
+Or in Python:
+```python
+from huggingface_hub import snapshot_download
+snapshot_download(repo_id="awakening-ai/ReactMotion1.0", local_dir="models/ReactMotion1.0")
+```
+
+## ⚡ Quick Demo
+
+### Inference Demo
+
+Download the pretrained model from [Hugging Face](https://huggingface.co/awakening-ai/ReactMotion1.0) and make sure you have run the [prepare scripts](#-pretrained-models--evaluators) to download the VQ-VAE checkpoint and normalization files. Then run:
+
+```bash
+python demo_inference.py \
+  --gen_ckpt   models/ReactMotion1.0 \
+  --vqvae_ckpt external/pretrained_vqvae/t2m.pth \
+  --mean_path  external/t2m/VQVAEV3_CB1024_CMT_H1024_NRES3/meta/mean.npy \
+  --std_path   external/t2m/VQVAEV3_CB1024_CMT_H1024_NRES3/meta/std.npy \
+  --text "It is really nice to meet you!" \
+  --emotion "excited" \
+  --cond_mode t+e \
+  --num_gen 3 \
+  --out_path output/demo_text_meet.mp4
+```
+
+The generated videos will be saved in `output/`, example shown below:
+
+<!-- TODO: add demo video/gif here -->
+<!-- <p align="center">
+  <img src="images/demo_meet.gif" alt="Demo: It is really nice to meet you!" style="max-height:320px; width:auto;">
+</p> -->
+
+<details>
+<summary>More demo examples</summary>
+
+**Audio + Text input:**
+```bash
+python demo_inference.py \
+  --gen_ckpt   models/ReactMotion1.0 \
+  --vqvae_ckpt external/pretrained_vqvae/t2m.pth \
+  --mean_path  external/t2m/VQVAEV3_CB1024_CMT_H1024_NRES3/meta/mean.npy \
+  --std_path   external/t2m/VQVAEV3_CB1024_CMT_H1024_NRES3/meta/std.npy \
+  --text "Let's celebrate!" \
+  --audio samples/speaker.wav \
+  --cond_mode t+a+e --emotion "happy" \
+  --out_path output/demo_fused.mp4
+```
+
+**Audio-only input:**
+```bash
+python demo_inference.py \
+  --gen_ckpt   models/ReactMotion1.0 \
+  --vqvae_ckpt external/pretrained_vqvae/t2m.pth \
+  --mean_path  external/t2m/VQVAEV3_CB1024_CMT_H1024_NRES3/meta/mean.npy \
+  --std_path   external/t2m/VQVAEV3_CB1024_CMT_H1024_NRES3/meta/std.npy \
+  --audio samples/speaker.wav \
+  --cond_mode a+e --emotion "happy" \
+  --out_path output/demo_audio.mp4
+```
+
+https://github.com/user-attachments/assets/e0096715-f8b9-400c-8dd8-434d1e10c8d4
+
+**Batch demo with shell script:**
+```bash
+bash scripts/demo.sh            # 3 text-only examples
+bash scripts/demo.sh --audio    # text + audio example
+```
+
+</details>
+<br>
+
+### 🖥️ Gradio Web UI
+
+Launch an interactive web demo:
+
+```bash
+python demo_gradio.py \
+  --gen_ckpt   models/ReactMotion1.0 \
+  --vqvae_ckpt external/pretrained_vqvae/t2m.pth \
+  --mean_path  external/t2m/VQVAEV3_CB1024_CMT_H1024_NRES3/meta/mean.npy \
+  --std_path   external/t2m/VQVAEV3_CB1024_CMT_H1024_NRES3/meta/std.npy \
+  --port 7860 --share
+```
+
+Or via the shell script:
+
+```bash
+bash scripts/demo.sh --gradio
+```
+
+Features:
+- Text input, audio upload, emotion selection
+- Adjustable generation parameters (temperature, top-p, top-k)
+- Side-by-side comparison of multiple generated motions
+
+## 🎯 Training
 
 ### Train ReactMotion (Generator)
 
@@ -156,6 +309,8 @@ python -m reactmotion.train.train_reactmotion \
   --learning_rate 5e-5 \
   --max_steps 100000
 ```
+
+We used 1 A100 GPU for training, which takes about 7 hours. The checkpoints will be saved in `logs/<WANDB_RUN_ID>/checkpoints/`.
 
 <details>
 <summary>Key training hyperparameters</summary>
@@ -204,8 +359,9 @@ python -m reactmotion.train.train_judge \
 | Ordering margin (gold-silver / silver-neg) | 0.20 / 0.20 |
 
 </details>
+<br>
 
-## Evaluation
+## 📊 Evaluation
 
 ### Generate Motions
 
@@ -258,49 +414,72 @@ python -m reactmotion.eval.eval_fid_diversity \
   --pairs_csv /path/to/test.csv
 ```
 
-## Project Structure
+## 📁 Project Structure
 
 ```
 reactmotion/
-├── reactmotion/                    # Main package
+├── reactmotion/                       # Main package
 │   ├── models/
-│   │   └── judge_network.py           # JudgeNetwork scorer
+│   │   ├── vqvae.py                      # Motion VQ-VAE (HumanVQVAE)
+│   │   ├── encdec.py                     # 1D Conv Encoder/Decoder
+│   │   ├── quantize_cnn.py               # VQ codebook (EMA reset)
+│   │   ├── resnet.py                     # Resnet1D blocks
+│   │   └── judge_network.py              # JudgeNetwork scorer
 │   ├── dataset/
-│   │   ├── reactmotionnet_dataset.py  # Dataset class
-│   │   ├── collator.py                # Ranking-aware collator
-│   │   ├── prompt_builder.py          # Multi-modal prompt construction
-│   │   ├── mimi_encoder.py            # Mimi streaming audio encoder
-│   │   └── audio_aug.py               # Audio augmentation
+│   │   ├── reactmotionnet_dataset.py     # ReactMotionNet dataset
+│   │   ├── humanml3d_dataset.py          # HumanML3D T2M dataset
+│   │   ├── joint_dataset.py              # Joint training dataset
+│   │   ├── collator.py                   # Ranking-aware collator
+│   │   ├── joint_collator.py             # Mixed-task collator
+│   │   ├── prompt_builder.py             # Multi-modal prompt construction
+│   │   ├── mimi_encoder.py               # Mimi streaming audio encoder
+│   │   └── audio_aug.py                  # Audio augmentation
 │   ├── train/
-│   │   ├── train_reactmotion.py       # Train generator (seq2seq)
-│   │   ├── train_judge.py             # Train scorer (contrastive)
-│   │   └── trainer_reactmotion.py     # Custom Seq2SeqTrainer
+│   │   ├── train_reactmotion.py          # Train generator (seq2seq + ranking)
+│   │   ├── train_judge.py                # Train scorer (contrastive)
+│   │   └── trainer_reactmotion.py        # Custom Seq2SeqTrainer
 │   ├── eval/
-│   │   ├── eval_reactmotion.py        # Generate motions
-│   │   ├── eval_judge.py              # Evaluate scorer ranking
-│   │   ├── eval_reactmotion_with_judge.py  # Generate + rank
-│   │   └── eval_fid_diversity.py      # FID & diversity metrics
+│   │   ├── eval_reactmotion.py           # Generate motions
+│   │   ├── eval_reactmotion_with_judge.py # Generate + rank
+│   │   ├── eval_judge.py                 # Evaluate scorer ranking
+│   │   └── eval_fid_diversity.py         # FID & diversity metrics
 │   ├── visualization/
-│   │   └── plot_3d_global.py          # 3D skeleton visualization
-│   ├── utils/                         # Rotation, skeleton, losses
-│   ├── baselines/                     # Baseline methods
-│   └── data/                          # CSV data splits
+│   │   └── plot_3d_global.py             # 3D skeleton visualization
+│   ├── utils/                            # Rotation, skeleton, losses
+│   └── baselines/                        # Baseline methods
+├── demo_inference.py                  # CLI inference demo
+├── demo_gradio.py                     # Gradio web UI demo
 ├── scripts/                           # Training & evaluation scripts
+│   ├── train_reactmotion.sh
+│   ├── train_judge.sh
+│   ├── eval_reactmotion.sh
+│   ├── evaluate.sh
+│   └── demo.sh
 ├── requirements.txt
 └── setup.py
 ```
 
-## Acknowledgements
+## 💡 Acknowledgements
 
-This project builds upon the following open-source projects:
+This project builds upon the following amazing open-source projects:
 [HumanML3D](https://github.com/EricGuo5513/HumanML3D),
-[Moshi](https://github.com/kyutai-labs/moshi),
+[T2M-GPT](https://github.com/Mael-zys/T2M-GPT),
+[Moshi/Mimi](https://github.com/kyutai-labs/moshi),
 [Hugging Face Transformers](https://github.com/huggingface/transformers),
-[T2M-GPT](https://github.com/Mael-zys/T2M-GPT).
+[wandb](https://github.com/wandb/wandb).
 
-## Citation
+## 📄 Citation
 
 ```bibtex
+@misc{luo2026reactmotiongeneratingreactivelistener,
+      title={ReactMotion: Generating Reactive Listener Motions from Speaker Utterance}, 
+      author={Cheng Luo and Bizhu Wu and Bing Li and Jianfeng Ren and Ruibin Bai and Rong Qu and Linlin Shen and Bernard Ghanem},
+      year={2026},
+      eprint={2603.15083},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV},
+      url={https://arxiv.org/abs/2603.15083}, 
+}
 ```
 
 ## License
