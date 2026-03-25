@@ -1,5 +1,3 @@
-# ReactMotion
-
 <p align="center">
 <h1 align="center">ReactMotion: Generating Reactive Listener Motions<br>from Speaker Utterance</h1>
 <p align="center">
@@ -232,6 +230,8 @@ python demo_inference.py \
 ```
 
 The generated videos will be saved in `output/`, example shown below:
+
+https://github.com/user-attachments/assets/e0096715-f8b9-400c-8dd8-434d1e10c8d4
 
 <!-- TODO: add demo video/gif here -->
 <!-- <p align="center">
