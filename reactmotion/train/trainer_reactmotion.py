@@ -119,6 +119,9 @@ class ReactMotionTrainer(Seq2SeqTrainer):
         enable_audio_aug: bool = False,
         audio_cache_size: int = 4096,
 
+        # T2M co-training loss weight
+        t2m_loss_weight: float = 1.0,
+
         **kwargs
     ):
         super().__init__(*args, **kwargs)
@@ -164,6 +167,8 @@ class ReactMotionTrainer(Seq2SeqTrainer):
         self._audio_cache: Dict[str, str] = {}
         self._audio_cache_order: List[str] = []
         self._audio_cache_size = int(audio_cache_size)
+
+        self.t2m_loss_weight = float(t2m_loss_weight)
 
         if self.enable_wav:
             self.mimi = MimiStreamingEncoder(device=str(self.args.device), codebooks=self.mimi_codebooks)
@@ -406,6 +411,9 @@ class ReactMotionTrainer(Seq2SeqTrainer):
             group_weights = torch.ones((int(group_sizes_gold.numel()),), dtype=torch.float32)
         group_weights = group_weights.to(self.args.device, dtype=torch.float32)
 
+        # T2M mask: which groups are text-to-motion (CE-only, no ranking)
+        is_t2m_mask = inputs.pop("is_t2m_mask", None)  # [Ng] bool or None
+
         enc, labels, group_sizes_gold = self._prepare_enc_for_loss(inputs)
         outputs = model(**enc)
         logits = outputs.logits
@@ -445,51 +453,60 @@ class ReactMotionTrainer(Seq2SeqTrainer):
             silver_val = seq_logp[offset + K]
             neg_val = seq_logp[offset + K + 1]
 
-            # --- gold score: LogSumExp over K golds (normalized if enabled) ---
-            gmax = gold_vals.max()
-            lse = gmax + torch.log(torch.exp(gold_vals - gmax).sum())
-            if self.normalize_logsumexp:
-                lse = lse - math.log(K)
-            gold_score = lse
+            # Check if this group is a T2M sample
+            gi_is_t2m = bool(is_t2m_mask[gi]) if is_t2m_mask is not None else False
 
-            # --- CE component: -log p(gold) ---
-            if self.loss_type == "ce":
-                # single gold (K should be 1 via collator setting)
+            if gi_is_t2m:
+                # T2M: simple CE loss only (K=1, silver/neg are dummies)
                 loss_ce = -gold_vals[0]
-            elif self.loss_type in ("multi_ce", "multi_ce_rank"):
-                # multi-gold: use LogSumExp aggregated score
-                loss_ce = -gold_score
+                group_loss = loss_ce
+                # Apply T2M loss weight scaling
+                weights.append(group_weights[gi] * self.t2m_loss_weight)
             else:
-                loss_ce = torch.tensor(0.0, device=gold_vals.device)
+                # ReactMotion: full ranking + CE + penalties
+                # --- gold score: LogSumExp over K golds ---
+                gmax = gold_vals.max()
+                lse = gmax + torch.log(torch.exp(gold_vals - gmax).sum())
+                if self.normalize_logsumexp:
+                    lse = lse - math.log(K)
+                gold_score = lse
 
-            # --- Rank component: gold > silver > neg margin ---
-            if self.loss_type in ("rank", "multi_ce_rank"):
-                loss_rank = (
-                    F.softplus(m - (gold_score - silver_val)) +
-                    F.softplus(m - (silver_val - neg_val)) +
-                    self.w_gn * F.softplus(m - (gold_score - neg_val))
-                )
-            else:
-                loss_rank = torch.tensor(0.0, device=gold_vals.device)
+                # --- CE component ---
+                if self.loss_type == "ce":
+                    loss_ce = -gold_vals[0]
+                elif self.loss_type in ("multi_ce", "multi_ce_rank"):
+                    loss_ce = -gold_score
+                else:
+                    loss_ce = torch.tensor(0.0, device=gold_vals.device)
 
-            # --- optional penalties ---
-            diversity_pen = 0.0
-            if self.diversity_w > 0:
-                sig = sigs[gi]
-                c = self._sig_count(sig)
-                diversity_pen = self.diversity_w * math.log(1.0 + float(c))
-                self._sig_inc(sig)
+                # --- Rank component ---
+                if self.loss_type in ("rank", "multi_ce_rank"):
+                    loss_rank = (
+                        F.softplus(m - (gold_score - silver_val)) +
+                        F.softplus(m - (silver_val - neg_val)) +
+                        self.w_gn * F.softplus(m - (gold_score - neg_val))
+                    )
+                else:
+                    loss_rank = torch.tensor(0.0, device=gold_vals.device)
 
-            batch_pen = 0.0
-            if self.batch_template_w > 0:
-                rep = int(sig_cnt[sigs[gi]])
-                if rep > 1:
-                    batch_pen = self.batch_template_w * float((rep - 1) ** self.batch_template_power)
+                # --- optional penalties ---
+                diversity_pen = 0.0
+                if self.diversity_w > 0:
+                    sig = sigs[gi]
+                    c = self._sig_count(sig)
+                    diversity_pen = self.diversity_w * math.log(1.0 + float(c))
+                    self._sig_inc(sig)
 
-            group_loss = loss_ce + self.w_rank * loss_rank + diversity_pen + batch_pen
+                batch_pen = 0.0
+                if self.batch_template_w > 0:
+                    rep = int(sig_cnt[sigs[gi]])
+                    if rep > 1:
+                        batch_pen = self.batch_template_w * float((rep - 1) ** self.batch_template_power)
+
+                group_loss = loss_ce + self.w_rank * loss_rank + diversity_pen + batch_pen
+                weights.append(group_weights[gi])
 
             losses.append(group_loss)
-            weights.append(group_weights[gi])
             offset += (K + 2)
 
         losses_t = torch.stack(losses)          # [Ng]
@@ -501,6 +518,6 @@ class ReactMotionTrainer(Seq2SeqTrainer):
         return (loss, outputs) if return_outputs else loss
 
     def evaluate_diversity(self, cfg):
-        # 最小实现：先不做任何生成评估，返回空 metrics
-        # 你后面再把真正的生成+统计逻辑填进来
+        # minimal implementation: no generation evaluation yet, return empty metrics
+        # fill in the actual generation + statistics logic later
         return {}

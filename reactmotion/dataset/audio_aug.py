@@ -13,7 +13,7 @@ import torchaudio.functional as AF
 from torch.utils.data import Dataset, DataLoader
 from huggingface_hub import hf_hub_download
 from moshi.models import loaders  # pip install moshiko-pytorch
-import soundfile as sf          # 关键：sf.read
+import soundfile as sf          # needed for sf.read
 import tempfile                 # TemporaryDirectory
 import subprocess               # subprocess.run
 from pathlib import Path        # Path(td) / "tmp.wav"
@@ -23,9 +23,9 @@ import math, tempfile, subprocess
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-os.environ["NO_CUDA_GRAPH"] = "1"  # 关闭 Mimi 的 CUDA 图捕获
-torch.backends.cudnn.benchmark = True  # 允许自动选更快算法
-torch.set_float32_matmul_precision("high")  # 对某些算子有帮助，副作用可忽略
+os.environ["NO_CUDA_GRAPH"] = "1"  # disable Mimi CUDA graph capture
+torch.backends.cudnn.benchmark = True  # allow auto-selection of faster algorithms
+torch.set_float32_matmul_precision("high")  # helps some ops, negligible side effects
 
 
 def ensure_2d_mono(w: torch.Tensor) -> torch.Tensor:
@@ -102,11 +102,11 @@ class MixedAcousticAug:
         n_fft, hop = 1024, 256
         window = torch.hann_window(n_fft, device=w.device)
 
-        # 很短片段直接跳过（避免边界效应）
+        # skip very short segments (avoid boundary effects)
         if w.shape[-1] < 2 * hop:
             return w
 
-        # 若太短，pad 到至少一帧
+        # if too short, pad to at least one frame
         need_trim = False
         if w.shape[-1] < n_fft:
             w = torch.nn.functional.pad(w, (0, n_fft - w.shape[-1]))
@@ -119,16 +119,16 @@ class MixedAcousticAug:
         phase_adv = torch.linspace(0, math.pi * hop, n_freq, device=w.device).unsqueeze(-1)
         stretched = AF.phase_vocoder(spec, factor, phase_adv)
 
-        # 不给 length，避免警告；随后我们手动对齐长度
+        # omit length to avoid warnings; we manually align length afterwards
         out = torch.istft(stretched, n_fft=n_fft, hop_length=hop, window=window, center=True)
 
-        # 对齐到原长度
+        # align to original length
         if out.shape[-1] >= orig_len:
             out = out[..., :orig_len]
         else:
             out = torch.nn.functional.pad(out, (0, orig_len - out.shape[-1]))
 
-        # 如果一开始为了凑 n_fft pad 过，确保不超界
+        # if we padded earlier to meet n_fft, ensure we don't exceed bounds
         if need_trim:
             out = out[..., :orig_len]
 

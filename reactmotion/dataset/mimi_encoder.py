@@ -13,7 +13,7 @@ import torchaudio.functional as AF
 from torch.utils.data import Dataset, DataLoader
 from huggingface_hub import hf_hub_download
 from moshi.models import loaders  # pip install moshiko-pytorch
-import soundfile as sf          # 关键：sf.read
+import soundfile as sf          # needed for sf.read
 import tempfile                 # TemporaryDirectory
 import subprocess               # subprocess.run
 from pathlib import Path        # Path(td) / "tmp.wav"
@@ -23,9 +23,9 @@ import math, tempfile, subprocess
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-os.environ["NO_CUDA_GRAPH"] = "1"  # 关闭 Mimi 的 CUDA 图捕获
-torch.backends.cudnn.benchmark = True  # 允许自动选更快算法
-torch.set_float32_matmul_precision("high")  # 对某些算子有帮助，副作用可忽略
+os.environ["NO_CUDA_GRAPH"] = "1"  # disable Mimi CUDA graph capture
+torch.backends.cudnn.benchmark = True  # allow auto-selection of faster algorithms
+torch.set_float32_matmul_precision("high")  # helps some ops, negligible side effects
 
 class MimiStreamingEncoder:
     """
@@ -53,35 +53,36 @@ class MimiStreamingEncoder:
     @torch.no_grad()
     def encode_many_concat(self, wav_list: List[torch.Tensor], chunk_frames: int = 32, return_latent: bool = True):
         """
-        批内拼接加速：将多条 [1,T_i] 对齐到 chunk_len 的整数倍，拼成一条 [1, T_cat]，
-        用一次 streaming 循环编码，再按帧数切回每条样本。
-        返回：
+        Batch concatenation for speedup: pad each [1,T_i] to a multiple of chunk_len,
+        concatenate into a single [1, T_cat], encode in one streaming loop, then split
+        back into per-sample results by frame count.
+        Returns:
           codes_list: List[[K,T_i]]
-          z_list:     List[[D,T_i]] 或 None
+          z_list:     List[[D,T_i]] or None
         """
         assert len(wav_list) > 0
         frame_size = self.frame_size
         chunk_len = frame_size * max(1, int(chunk_frames))
 
-        # 1) pad 每条到 chunk_len 整数倍，并记录帧长
+        # 1) pad each sample to a multiple of chunk_len and record frame counts
         padded = []
         T_frames = []
         for w in wav_list:
             w = w.to(self.device, non_blocking=True)  # [1,T]
             T = w.shape[-1]
-            # 对齐帧数
+            # align to frame boundary
             n_frames = math.ceil(T / chunk_len)
             T_pad = n_frames * chunk_len
             if T_pad > T:
                 w = torch.cat([w, torch.zeros(1, T_pad - T, device=w.device, dtype=w.dtype)], dim=-1)
             padded.append(w)
-            T_frames.append(n_frames * chunk_frames)  # 对应帧数（每 chunk = chunk_frames 帧）
+            T_frames.append(n_frames * chunk_frames)  # corresponding frame count (each chunk = chunk_frames frames)
 
-        # 2) 按时间维拼接 -> [1, T_cat]
+        # 2) concatenate along time dimension -> [1, T_cat]
         cat = torch.cat(padded, dim=-1)  # [1, T_cat]
         x = cat.unsqueeze(0)  # [1,1,T_cat]
 
-        # 3) 一次 streaming 循环
+        # 3) single streaming loop
         codes_all = []
         lat_all = [] if return_latent else None
         with self.mimi.streaming(batch_size=1):
@@ -96,7 +97,7 @@ class MimiStreamingEncoder:
         codes_cat = torch.cat(codes_all, dim=-1).squeeze(0).long().cpu()  # [K, sum_Tf]
         z_cat = torch.cat(lat_all, dim=-1).squeeze(0).float().cpu() if return_latent else None  # [D, sum_Tf]
 
-        # 4) 按记录的帧数切回
+        # 4) split back by recorded frame counts
         codes_list, z_list = [], []
         start = 0
         for Tf in T_frames:

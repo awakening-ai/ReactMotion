@@ -17,14 +17,14 @@ import json, hashlib, time
 from dataclasses import dataclass
 
 def _stable_key_from_prompt(prompt: str) -> str:
-    # 只要 prompt 一样，key 就一样；避免文件名/ID 不可得
+    # as long as the prompt is the same, the key is the same; avoids reliance on filename/ID
     h = hashlib.md5(prompt.encode("utf-8")).hexdigest()
     return f"promptmd5:{h}"
 
 class JsonlWriter:
     def __init__(self, path: str):
         self.path = path
-        self.f = open(path, "a", encoding="utf-8")  # append，支持 repeat_time 多轮累积
+        self.f = open(path, "a", encoding="utf-8")  # append, supports multi-round accumulation across repeat_time
         self.n = 0
 
     def write(self, obj: dict):
@@ -68,7 +68,7 @@ def token_entropy(seq):
 
 class GenTokenLogger:
     """
-    逐条记录生成 token 序列及统计指标 -> CSV
+    Records generated token sequences and statistics per sample -> CSV
     """
     def __init__(self, out_csv: str):
         self.out_csv = out_csv
@@ -84,7 +84,7 @@ class GenTokenLogger:
         L = len(codes)
         mx = max(codes) if L > 0 else -1
         has_end = ("</Motion Tokens>" in text)
-        # ended_by_eos: 最后一个 token id 是 eos（注意：outputs 里包含 prompt+gen）
+        # ended_by_eos: last token id is eos (note: outputs includes prompt+gen)
         ended_by_eos = (int(output_ids[-1]) == int(eos_id)) if eos_id is not None and len(output_ids) > 0 else False
 
         self.w.writerow([
@@ -152,13 +152,13 @@ _MOTION_TOKEN_RE = re.compile(r"<Motion Token\s+(\d+)>")
 
 def parse_motion_tokens(text: str, max_len: Optional[int] = None, codebook_size: int = 512) -> List[int]:
     """
-    只解析 <Motion Token i>，优先取 <Motion Tokens>...</Motion Tokens> 内的内容。
+    Only parses <Motion Token i>, preferring content within <Motion Tokens>...</Motion Tokens>.
     """
     m = _MOTION_SPAN_RE.search(text)
     span = m.group(1) if m else text
 
     codes = [int(x) for x in _MOTION_TOKEN_RE.findall(span)]
-    # 过滤非法
+    # filter out invalid codes
     codes = [c for c in codes if 0 <= c < codebook_size]
 
     if max_len is not None:
@@ -172,8 +172,8 @@ def evaluation_1PosePerTime(val_loader, net, model, logger, tokenizer, eval_wrap
     gen_csv = "gen_vq_tokens_eval.csv"
     gen_logger = GenTokenLogger(gen_csv)
 
-    gen_jsonl = f"gen_tokens_{int(time.time())}.jsonl"  # 或者带 checkpoint/seed
-    gen_writer = JsonlWriter(gen_jsonl)  # 你 JsonlWriter 要支持 mode
+    gen_jsonl = f"gen_tokens_{int(time.time())}.jsonl"  # optionally include checkpoint/seed
+    gen_writer = JsonlWriter(gen_jsonl)  # JsonlWriter should support mode
 
     motion_annotation_list = []
     motion_pred_list = []
@@ -200,7 +200,7 @@ def evaluation_1PosePerTime(val_loader, net, model, logger, tokenizer, eval_wrap
         dbg_has_motion = 0
         dbg_has_audio = 0
         dbg_eos_early = 0
-        dbg_print_limit = 2  # 每个 batch 打印几条原始输出
+        dbg_print_limit = 2  # how many raw outputs to print per batch
         dbg_printed = 0
 
 
@@ -228,7 +228,7 @@ def evaluation_1PosePerTime(val_loader, net, model, logger, tokenizer, eval_wrap
                     truncation=True,
                     max_length=256,
                 )
-                enc = {k: v.to(device) for k, v in enc.items()}  # ✅ 兼容所有版本 transformers
+                enc = {k: v.to(device) for k, v in enc.items()}  # compatible with all transformers versions
 
                 outputs = model.generate(
                     **enc,
@@ -237,8 +237,8 @@ def evaluation_1PosePerTime(val_loader, net, model, logger, tokenizer, eval_wrap
                     temperature=temperature,
                     top_k=top_k,
                     stopping_criteria=stopping,
-                    eos_token_id=tokenizer.eos_token_id,  # 保留
-                    pad_token_id=tokenizer.pad_token_id,  # 建议显式给
+                    eos_token_id=tokenizer.eos_token_id,  # keep
+                    pad_token_id=tokenizer.pad_token_id,  # recommended to set explicitly
                     repetition_penalty=1.1,
 
                 )
@@ -278,7 +278,7 @@ def evaluation_1PosePerTime(val_loader, net, model, logger, tokenizer, eval_wrap
                     output_ids=outputs[0].detach().cpu().tolist()
                 )
 
-                # 抽样打印原始输出，看看到底生成了啥
+                # sample-print raw outputs to inspect what was generated
                 if dbg_printed < dbg_print_limit:
                     logger.info(f"[DBG] prompt(head)={prompt[:120]}...")
                     logger.info(f"[DBG] decoded(head)={text[:500]}")
@@ -367,7 +367,7 @@ def evaluation_1PosePerTime(val_loader, net, model, logger, tokenizer, eval_wrap
     gen_writer.close()
     logger.info(f"[GEN] saved jsonl -> {gen_jsonl}")
 
-    # 可选：直接在 eval 里做摘要（需要 pandas）
+    # optional: summarize directly in eval (requires pandas)
     try:
         s = summarize_csv(gen_csv)
         logger.info(f"[GEN] token stats: {s}")
@@ -476,10 +476,10 @@ def calculate_diversity(activation, diversity_times):
     assert len(activation.shape) == 2
     n = activation.shape[0]
     if n < 2:
-        return 0.0  # 或 np.nan
+        return 0.0  # or np.nan
 
     diversity_times = int(min(diversity_times, n - 1))
-    # 保险：避免 diversity_times=0
+    # safety check: avoid diversity_times=0
     diversity_times = max(diversity_times, 1)
 
     first_indices = np.random.choice(n, diversity_times, replace=False)

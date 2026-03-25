@@ -212,7 +212,7 @@ class ReactMotionNet(Dataset):
 
         # ✅ NEW: group weight from csv
         group_w_mode: str = "none",      # none | from_csv | constant
-        group_w_col: str = "score",      # score | group_w | item_w ...
+        group_w_col: str = "group_w",     # group_w | score | item_w ...
         group_w_agg: str = "mean",       # mean | max | first
         group_w_const: float = 1.0,
         group_w_clip_min: float = 0.2,
@@ -272,9 +272,9 @@ class ReactMotionNet(Dataset):
 
         df = _read_split_csv(self.pairs_csv, split).copy()
 
-        need_cols = ["label", "sayings", "emotion", "raw_file_name"]
+        need_cols = ["tier_label", "speaker_transcript", "speaker_emotion", "motion_id"]
         if self.audio_mode != "none":
-            need_cols.append("generated_wav_name")
+            need_cols.append("speaker_audio_wav")
 
         for c in need_cols:
             if c not in df.columns:
@@ -292,13 +292,13 @@ class ReactMotionNet(Dataset):
         if self.key_by == "group_id" and ("group_id" not in df.columns):
             raise RuntimeError("key_by='group_id' but csv missing `group_id` column")
 
-        df["label"] = df["label"].astype(str).str.lower().str.strip()
-        df["sayings"] = df["sayings"].map(normalize_text)
-        df["emotion"] = df["emotion"].astype(str)
-        df["motion_id"] = df["raw_file_name"].apply(_to_motion_id)
+        df["tier_label"] = df["tier_label"].astype(str).str.lower().str.strip()
+        df["speaker_transcript"] = df["speaker_transcript"].map(normalize_text)
+        df["speaker_emotion"] = df["speaker_emotion"].astype(str)
+        df["motion_id"] = df["motion_id"].apply(_to_motion_id)
 
         if self.audio_mode != "none":
-            df["generated_wav_name"] = df["generated_wav_name"].map(_clean_audio_stem)
+            df["speaker_audio_wav"] = df["speaker_audio_wav"].map(_clean_audio_stem)
 
         drops = dict(
             bad_label=0,
@@ -316,9 +316,9 @@ class ReactMotionNet(Dataset):
         if self.key_by == "group_id":
             group_cols = ["group_id"]
         elif self.key_by == "sayings_only":
-            group_cols = ["sayings"]
+            group_cols = ["speaker_transcript"]
         else:
-            group_cols = ["sayings", "emotion"]
+            group_cols = ["speaker_transcript", "speaker_emotion"]
 
         def _safe_float(x, default=1.0):
             try:
@@ -327,8 +327,8 @@ class ReactMotionNet(Dataset):
                 return float(default)
 
         for keys, g in df.groupby(group_cols, dropna=False):
-            sayings = str(g["sayings"].iloc[0])
-            emotion = str(g["emotion"].iloc[0])
+            sayings = str(g["speaker_transcript"].iloc[0])
+            emotion = str(g["speaker_emotion"].iloc[0])
             key = str(keys) if not isinstance(keys, tuple) else "|||".join(map(str, keys))
 
             gold_mids: List[str] = []
@@ -338,7 +338,7 @@ class ReactMotionNet(Dataset):
 
             ok = True
             for r in g.itertuples(index=False):
-                lab = str(getattr(r, "label")).lower().strip()
+                lab = str(getattr(r, "tier_label")).lower().strip()
                 if lab not in {"gold", "silver", "neg"}:
                     drops["bad_label"] += 1
                     ok = False
@@ -353,7 +353,7 @@ class ReactMotionNet(Dataset):
                     neg_mids.append(mid)
 
                 if self.audio_mode != "none":
-                    stem = str(getattr(r, "generated_wav_name")).strip()
+                    stem = str(getattr(r, "speaker_audio_wav")).strip()
                     if not stem:
                         drops["audio_stem_empty"] += 1
                     else:
@@ -533,7 +533,7 @@ class ReactMotionNet(Dataset):
                 "[ReactMotionNet] got 0 queries after filtering.\n"
                 "See drop_reasons above. Common causes:\n"
                 "  - key_by wrong (try group_id)\n"
-                "  - generated_wav_name missing/empty\n"
+                "  - speaker_audio_wav missing/empty\n"
                 "  - audio_code_dir/wav_dir wrong\n"
                 "  - VQVAE dir missing / motion_id mismatch\n"
             )

@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-train_gsn_rank_flex.py
+train_reactmotion.py
 
 - Supports:
   - resume from checkpoint safely (tokenizer+model loaded from ckpt to avoid vocab mismatch)
@@ -101,7 +101,7 @@ def load_model_and_tokenizer(
 ) -> Tuple[T5Tokenizer, T5ForConditionalGeneration]:
     """
     IMPORTANT:
-    - If resuming, load tokenizer+model from checkpoint to guarantee vocab一致 (避免 size mismatch)
+    - If resuming, load tokenizer+model from checkpoint to guarantee vocab consistency (avoid size mismatch)
     - If fresh, load from model_name then add motion/audio/emotion tokens and resize embeddings.
     """
     if resume_ckpt:
@@ -174,7 +174,7 @@ def safe_init(cls_or_fn, kwargs: Dict[str, Any], name: str):
     """
     Some of your local modules (Trainer/Collator) might not yet accept new args.
     This helper tries to construct with kwargs; if TypeError occurs, it will drop
-    unknown kwargs and retry (so脚本不因为多传参数而炸).
+    unknown kwargs and retry (so the script does not crash from extra arguments).
     """
     try:
         return cls_or_fn(**kwargs)
@@ -299,8 +299,8 @@ def main():
     ap.add_argument("--group_w_mode", type=str, default="none",
                     choices=["none", "from_csv", "constant"],
                     help="Group-wise sample weight mode.")
-    ap.add_argument("--group_w_col", type=str, default="score",
-                    help="CSV column name for group weight, e.g. score/group_w/item_w.")
+    ap.add_argument("--group_w_col", type=str, default="group_w",
+                    help="CSV column name for group weight, e.g. group_w/score/item_w.")
     ap.add_argument("--group_w_agg", type=str, default="mean",
                     choices=["mean", "max", "first"],
                     help="Aggregation over rows within a group when using from_csv.")
@@ -316,6 +316,18 @@ def main():
                     help="Weight for within-batch duplicate-signature penalty (0 disables).")
     ap.add_argument("--batch_template_power", type=float, default=1.0,
                     help="Penalty exponent for within-batch duplicates.")
+
+    # ----------------------------------------
+    # OPTIONAL: T2M co-training (HumanML3D text-to-motion)
+    # ----------------------------------------
+    ap.add_argument("--enable_t2m", action="store_true",
+                    help="Enable joint training with HumanML3D text-to-motion task.")
+    ap.add_argument("--t2m_ratio", type=float, default=0.33,
+                    help="Fraction of T2M samples in each epoch (default 0.33 = 1:2 ratio).")
+    ap.add_argument("--t2m_loss_weight", type=float, default=1.0,
+                    help="Weight for T2M loss relative to ReactMotion loss.")
+    ap.add_argument("--humanml3d_dir", type=str, default=None,
+                    help="Path to HumanML3D directory (default: {dataset_dir}/HumanML3D).")
 
     args = ap.parse_args()
     os.makedirs(args.output_dir, exist_ok=True)
@@ -364,7 +376,7 @@ def main():
     # -------------------------
     # datasets
     # -------------------------
-    train_ds = ReactMotionNet(
+    rm_train_ds = ReactMotionNet(
         split="train",
         dataset_dir=args.dataset_dir,
         pairs_csv=args.pairs_csv,
@@ -377,7 +389,37 @@ def main():
         wav_dir=args.wav_dir,
         min_gold=1, min_silver=1, min_neg=1,
         min_audio=1 if args.audio_mode != "none" else 0,
+        group_w_mode=args.group_w_mode,
+        group_w_col=args.group_w_col,
+        group_w_agg=args.group_w_agg,
+        group_w_const=args.group_w_const,
+        group_w_clip_min=args.group_w_clip_min,
+        group_w_clip_max=args.group_w_clip_max,
     )
+
+    train_ds = rm_train_ds
+    train_sampler = None
+
+    if args.enable_t2m:
+        from reactmotion.dataset.humanml3d_dataset import HumanML3DDataset
+        from reactmotion.dataset.joint_dataset import JointDataset, build_weighted_sampler
+
+        hml_dir = args.humanml3d_dir or os.path.join(args.dataset_dir, "HumanML3D")
+        t2m_train_ds = HumanML3DDataset(
+            split="train",
+            dataset_dir=args.dataset_dir,
+            humanml3d_dir=hml_dir,
+        )
+        train_ds = JointDataset(rm_train_ds, t2m_train_ds)
+        train_sampler = build_weighted_sampler(
+            rm_size=len(rm_train_ds),
+            t2m_size=len(t2m_train_ds),
+            t2m_ratio=args.t2m_ratio,
+        )
+        print(
+            f"[JointTraining] ReactMotion={len(rm_train_ds)} + T2M={len(t2m_train_ds)} "
+            f"= {len(train_ds)} total, t2m_ratio={args.t2m_ratio:.2f}"
+        )
 
     val_ds = None
     if args.do_eval:
@@ -394,6 +436,12 @@ def main():
             wav_dir=args.wav_dir,
             min_gold=1, min_silver=1, min_neg=1,
             min_audio=1 if args.audio_mode != "none" else 0,
+            group_w_mode=args.group_w_mode,
+            group_w_col=args.group_w_col,
+            group_w_agg=args.group_w_agg,
+            group_w_const=args.group_w_const,
+            group_w_clip_min=args.group_w_clip_min,
+            group_w_clip_max=args.group_w_clip_max,
         )
         if args.eval_max_samples and args.eval_max_samples > 0:
             idxs = list(range(len(val_ds)))
@@ -412,7 +460,7 @@ def main():
         fixed_k_gold=args.k_gold,
         sample_gold=args.sample_gold,
         force_first_motion=True,
-        one_gold=True,  # 始终只在一个 gold 上展开, K 由 fixed_k_gold 控制
+        one_gold=True,  # always expand on a single gold; K is controlled by fixed_k_gold
         cond_mode=args.cond_mode,
         audio_mode=args.audio_mode,
         audio_sr=args.audio_sr,
@@ -426,11 +474,16 @@ def main():
         drop_e_only_when_multi=args.drop_e_only_when_multi,
     )
 
-    # 对于纯 cross-entropy 训练: 只用一个固定 gold 做 gt
+    # for pure cross-entropy training: use only one fixed gold as ground truth
     if args.loss_type == "ce":
         collator_kwargs["fixed_k_gold"] = 1
         collator_kwargs["sample_gold"] = "first"
-    collator = safe_init(ReactMotionCollator, collator_kwargs, "ReactMotionCollator")
+
+    if args.enable_t2m:
+        from reactmotion.dataset.joint_collator import JointCollator
+        collator = safe_init(JointCollator, collator_kwargs, "JointCollator")
+    else:
+        collator = safe_init(ReactMotionCollator, collator_kwargs, "ReactMotionCollator")
 
     # -------------------------
     # training args
@@ -521,9 +574,16 @@ def main():
         # in-batch template suppression
         batch_template_w=args.batch_template_w,
         batch_template_power=args.batch_template_power,
+
+        # T2M co-training
+        t2m_loss_weight=getattr(args, "t2m_loss_weight", 1.0),
     )
 
     trainer = safe_init(ReactMotionTrainer, trainer_kwargs, "ReactMotionTrainer")
+
+    # Override sampler for joint training (weighted random sampling)
+    if train_sampler is not None:
+        trainer._get_train_sampler = lambda _dataset=None: train_sampler
 
     trainer.add_callback(DiversityEarlyStopCallback(div_cfg))
     div_cb = DiversitySimpleCallback(
@@ -536,7 +596,7 @@ def main():
     sig_max_len=64,
     prefix="div",
     )
-    div_cb.trainer = trainer          # ✅ 关键：绑定
+    div_cb.trainer = trainer          # bind trainer reference
     trainer.add_callback(div_cb)
 
 

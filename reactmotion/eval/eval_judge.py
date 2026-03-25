@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-eval/eval_unified_scorer_strictL2.py
+eval/eval_judge.py
 
-✅ Strict-L2 "严格缺失" eval：
-- 对于该 sample 不启用的模态，直接在 collate 阶段把输入改成“无信息”：
-    * no text  -> text_input_ids 全 pad, attention_mask 全 0
-    * no audio -> audio_codes 全 pad_id, audio_pad_mask 全 True
+Strict-L2 “strict missing modality” eval:
+- For modalities not enabled for a sample, replace inputs with “no information” at collate time:
+    * no text  -> text_input_ids all pad, attention_mask all 0
+    * no audio -> audio_codes all pad_id, audio_pad_mask all True
     * no emo   -> emotion_ids = <unk>
 
-✅ Win 指标统一为 mean(A) > mean(B)：g>n: mean(gold)>mean(neg); g>s: mean(gold)>mean(silver); s>n: mean(silver)>mean(neg)
-✅ 支持：--fixed_mode, --cond_head, bootstrap CI
+Win metric unified as mean(A) > mean(B): g>n: mean(gold)>mean(neg); g>s: mean(gold)>mean(silver); s>n: mean(silver)>mean(neg)
+Supports: --fixed_mode, --cond_head, bootstrap CI
 
-依赖：
-- 需要你训练代码文件 train/train_scorer.py（或你自己的路径）里定义了：
+Dependencies:
+- Requires the following defined in train/train_scorer.py (or your own path):
   DEFAULT_AUDIO_VOCAB, DEFAULT_AUDIO_PAD, DEFAULT_MOTION_VOCAB,
   read_split_csv, JudgeGroupDataset, JudgeNetwork, move_cb_to,
   group_infonce_loss
@@ -153,14 +153,14 @@ def win_rates_groupwise(logits: torch.Tensor, label: torch.Tensor, cand_mask: to
 
 class JudgeEvalCollator:
     """
-    基于你训练时的 GroupCollator 思路实现，但增加 Strict-L2：
+    Based on the GroupCollator approach from training, with added Strict-L2:
     - no text  -> pad/zero attn
     - no audio -> all pad + all padmask True
     - no emo   -> <unk>
 
-    也支持：
-    - fixed_mode：强制整个 batch 使用某个 mode
-    - disable_text/audio/emo：全局禁用（用于 ablation）
+    Also supports:
+    - fixed_mode: force the entire batch to use a specific mode
+    - disable_text/audio/emo: globally disable modalities (for ablation)
     """
 
     def __init__(
@@ -213,12 +213,12 @@ class JudgeEvalCollator:
     def _sample_modes(self, B: int) -> List[str]:
         if self.fixed_mode:
             return [self.fixed_mode] * B
-        # eval 默认 deterministic：按顺序循环
+        # eval default is deterministic: cycle in order
         if self.deterministic_mode:
             base = self._call_idx
             self._call_idx += 1
             return [MODES_FULL[(base + i) % len(MODES_FULL)] for i in range(B)]
-        # 若你真要随机：
+        # if truly random sampling is needed:
         rng = random.Random(self.seed ^ (self._call_idx * 1337))
         self._call_idx += 1
         return [rng.choice(MODES_FULL) for _ in range(B)]
@@ -306,7 +306,7 @@ class JudgeEvalCollator:
             text_input_ids=text_input_ids, text_attn_mask=text_attn_mask,
             emotion_ids=emotion_ids,
             audio_codes=audio_codes, audio_pad_mask=audio_pad_mask,
-            debug_modes=modes,   # ✅ 新增：list[str]
+            debug_modes=modes,   # added: list[str]
         )
 
 
@@ -412,7 +412,7 @@ def run_eval_ranker_reliability(
                 sample_w=None,
             )
 
-            # logits 防护（防止后面 win/ndcg 全挂）
+            # logits guard (prevent all win/ndcg from failing downstream)
             logits = torch.nan_to_num(logits, nan=-1e9, posinf=1e9, neginf=-1e9)
             
         all_losses.append(float(loss.item()))
@@ -468,10 +468,10 @@ def run_eval_ranker_reliability(
 # -------------------------
 
 def build_model_from_ckpt(args, emo2id, device, ckpt_obj):
-    # 用 ckpt 保存的结构参数（但不覆盖 eval-only 参数）
+    # use structural params saved in checkpoint (without overriding eval-only params)
     ckpt_args = ckpt_obj.get("args", None)
     if ckpt_args is not None:
-        # 只同步模型结构相关
+        # only sync model-structure-related keys
         model_keys = {
             "t5_encoder", "max_text_len", "max_audio_len", "max_motion_len",
             "d_model", "output_dim", "nhead", "enc_layers", "ff_dim", "dropout", "temperature"
@@ -575,7 +575,7 @@ def main():
     if emo2id is None:
         df_tr = read_split_csv(args.pairs_csv, "train")
         df_va = read_split_csv(args.pairs_csv, "val")
-        emos = sorted(set([str(x).strip().lower() for x in list(df_tr["emotion"]) + list(df_va["emotion"]) if str(x).strip()]))
+        emos = sorted(set([str(x).strip().lower() for x in list(df_tr["speaker_emotion"]) + list(df_va["speaker_emotion"]) if str(x).strip()]))
         emo2id = {"<unk>": 0}
         for e in emos:
             if e not in emo2id:

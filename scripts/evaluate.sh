@@ -7,18 +7,18 @@ set -euo pipefail
 # =========================
 
 # Paths (edit these)
-DATASET_DIR="/path/to/dataset/A2R"
-PAIRS_CSV="./data"
-AUDIO_CODE_DIR="/path/to/audio_codes"
-GEN_CKPT="/path/to/generator/checkpoint"
-JUDGE_CKPT="/path/to/judge/best.pt"
+DATASET_DIR="/path/to/dataset"
+PAIRS_CSV="./reactmotion/data"
+AUDIO_CODE_DIR="/path/to/audio_code"
+GEN_CKPT="./output/checkpoint-100000"
+CKPT="/path/to/judge/best.pt"
 OUT_DIR="./eval_output"
 
 # FID-specific paths (only needed for --pipeline fid or all)
-T2M_OPT="./checkpoints/t2m/Comp_v6_KLD005/opt.txt"
-VQVAE_CKPT="/path/to/motion_VQVAE/net_last.pth"
-MEAN_PATH="./dataset/HumanML3D/Mean.npy"
-STD_PATH="./dataset/HumanML3D/Std.npy"
+T2M_OPT="external/t2m/Comp_v6_KLD005/opt.txt"
+VQVAE_CKPT="external/pretrained_vqvae/t2m.pth"
+MEAN_PATH="external/t2m/VQVAEV3_CB1024_CMT_H1024_NRES3/meta/mean.npy"
+STD_PATH="external/t2m/VQVAEV3_CB1024_CMT_H1024_NRES3/meta/std.npy"
 
 # Settings
 COND_MODE="${1:-t+a+e}"         # t | a | t+e | a+e | t+a | t+a+e
@@ -48,7 +48,7 @@ python -m reactmotion.eval.evaluate \
   --pairs_csv "${PAIRS_CSV}" \
   --audio_code_dir "${AUDIO_CODE_DIR}" \
   --gen_ckpt "${GEN_CKPT}" \
-  --judge_ckpt "${JUDGE_CKPT}" \
+  --judge_ckpt "${CKPT}" \
   --cond_mode "${COND_MODE}" \
   ${USE_EMO_FLAG} \
   ${AUDIO_FLAGS} \

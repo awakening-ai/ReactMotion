@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import matplotlib
-matplotlib.use("Agg")  # 必须在 import pyplot 前
+matplotlib.use("Agg")  # must be called before import pyplot
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -21,15 +21,15 @@ def plot_3d_motion(
     azim=-90,
     linewidth_root=3.0,
     linewidth_limb=2.5,
-    fixed_camera=True,       # True: 镜头不动（全局范围）; False: 每帧自适应
-    half_scale=0.55,         # 越小镜头越近；建议 0.45~0.70
-    draw_traj=True,          # 是否画 root trajectory
-    draw_ground=False,       # 是否画 ground plane
+    fixed_camera=True,       # True: camera stays fixed (global range); False: adaptive per frame
+    half_scale=0.55,         # smaller value = closer camera; recommended 0.45~0.70
+    draw_traj=True,          # whether to draw root trajectory
+    draw_ground=False,       # whether to draw ground plane
 ):
     """
     args: [joints, out_name, title]
       - joints: (T, J, 3) numpy array
-      - out_name: optional (保持兼容；本实现不依赖它)
+      - out_name: optional (kept for compatibility; this implementation does not depend on it)
       - title: optional, e.g., ["line1", "line2"] or None
 
     return:

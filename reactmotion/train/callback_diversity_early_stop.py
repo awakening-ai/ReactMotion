@@ -146,17 +146,17 @@ class DiversityEarlyStopCallback(TrainerCallback):
         if trainer is None:
             return control
 
-        # 只在主进程做（避免多卡重复 generate）
+        # only run on main process (avoid duplicate generation across GPUs)
         if hasattr(trainer, "is_world_process_zero") and (not trainer.is_world_process_zero()):
             return control
 
         metrics = self._compute_diversity_metrics(trainer)
         self.last_metrics = metrics
 
-        # 记录到 log / wandb
+        # log to log / wandb
         trainer.log(metrics)
 
-        # 判定是否坍塌
+        # determine whether collapse occurred
         collapse = (
             metrics["div/unique_ratio"] < self.cfg.min_unique_ratio
             or metrics["div/top1_freq"] > self.cfg.max_top1_freq

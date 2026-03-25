@@ -3,20 +3,20 @@
 """
 eval/eval_random.py
 
-Random baseline: 对每个 test 样本，从
-  /ibex/project/.../HumanML3D/VQVAE/*.npy
-中随机抽取一个 VQ code 文件作为 listener motion 预测，
-然后计算 FID & Diversity，并保存 joint_vecs / motion_tokens
-以便后续用 run_eval_retrieval_win_rates.sh 计算 Win↑/Gen@3↑。
+Random baseline: for each test sample, randomly picks one VQ code file from
+  /path/to/dataset/HumanML3D/VQVAE/*.npy
+as the listener motion prediction,
+then computes FID & Diversity, and saves joint_vecs / motion_tokens
+for subsequent Win/Gen@3 computation via run_eval_retrieval_win_rates.sh.
 
-用法:
+Usage:
   python -m eval.eval_random \\
-    --dataset_dir  /ibex/project/c2191/luoc/dataset/A2R \\
+    --dataset_dir  /path/to/dataset \\
     --pairs_csv    ./new_data \\
     --t2m_opt      ./checkpoints/t2m/Comp_v6_KLD005/opt.txt \\
-    --vqvae_ckpt   /home/luoc/.../t2m.pth \\
-    --mean_path    /home/luoc/.../mean.npy \\
-    --std_path     /home/luoc/.../std.npy \\
+    --vqvae_ckpt   /path/to/motion_VQVAE/t2m.pth \\
+    --mean_path    /path/to/mean.npy \\
+    --std_path     /path/to/std.npy \\
     --out_dir      ./out_random \\
     --seed         42
 """
@@ -312,7 +312,7 @@ def main():
 
     # Load test set (unique listener motions)
     df = read_test_csv(args.pairs_csv, args.test_split)
-    df["_mid"] = df["raw_file_name"].apply(motion_id_from_raw)
+    df["_mid"] = df["motion_id"].apply(motion_id_from_raw)
     df = df[df["_mid"] != "000000"].drop_duplicates("_mid").reset_index(drop=True)
     test_ids = df["_mid"].tolist()
     N_test   = len(test_ids)

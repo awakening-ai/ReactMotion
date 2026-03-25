@@ -155,7 +155,7 @@ def main():
     # emotion vocab from train+val
     df_tr = read_split_csv(args.pairs_csv, "train")
     df_va = read_split_csv(args.pairs_csv, "val")
-    emos = sorted(set([str(x).strip().lower() for x in pd.concat([df_tr["emotion"], df_va["emotion"]]).tolist()
+    emos = sorted(set([str(x).strip().lower() for x in pd.concat([df_tr["speaker_emotion"], df_va["speaker_emotion"]]).tolist()
                        if str(x).strip()]))
     emo2id = {"<unk>": 0}
     for e in emos:

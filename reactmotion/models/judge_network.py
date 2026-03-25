@@ -272,18 +272,18 @@ class JudgeGroupDataset(Dataset):
         assert key_by in ["group_id", "sayings_emotion"]
 
         df = read_split_csv(pairs_csv, split).copy()
-        need_cols = ["label", "sayings", "emotion", "raw_file_name", "generated_wav_name"]
+        need_cols = ["tier_label", "speaker_transcript", "speaker_emotion", "motion_id", "speaker_audio_wav"]
         missing = [c for c in need_cols if c not in df.columns]
         if missing:
             raise RuntimeError(f"Missing columns in csv: {missing}. Found: {list(df.columns)}")
         if key_by == "group_id" and ("group_id" not in df.columns):
             raise RuntimeError("key_by='group_id' but csv missing `group_id` column")
 
-        df["label_c"] = df["label"].apply(canon_label)
-        df["sayings"] = df["sayings"].map(normalize_text)
-        df["emotion"] = df["emotion"].astype(str).fillna("").str.strip()
-        df["motion_id"] = df["raw_file_name"].apply(motion_id_from_raw)
-        df["audio_stem"] = df["generated_wav_name"].map(clean_audio_stem)
+        df["label_c"] = df["tier_label"].apply(canon_label)
+        df["speaker_transcript"] = df["speaker_transcript"].map(normalize_text)
+        df["speaker_emotion"] = df["speaker_emotion"].astype(str).fillna("").str.strip()
+        df["motion_id"] = df["motion_id"].apply(motion_id_from_raw)
+        df["audio_stem"] = df["speaker_audio_wav"].map(clean_audio_stem)
 
         if "item_w" in df.columns:
             df["item_w"] = pd.to_numeric(df["item_w"], errors="coerce").fillna(1.0).astype(np.float32)
@@ -305,7 +305,7 @@ class JudgeGroupDataset(Dataset):
         self.k_neg = int(k_neg)
         self.epoch = 0
 
-        gb = df.groupby(["group_id"], dropna=False) if key_by == "group_id" else df.groupby(["sayings", "emotion"], dropna=False)
+        gb = df.groupby(["group_id"], dropna=False) if key_by == "group_id" else df.groupby(["speaker_transcript", "speaker_emotion"], dropna=False)
 
         # motion-id -> max item weight
         mid2w = {}
@@ -332,8 +332,8 @@ class JudgeGroupDataset(Dataset):
             return [(p, mp[p]) for p in mp.keys()]
 
         for key, g in gb:
-            sayings = str(g["sayings"].iloc[0])
-            emotion = str(g["emotion"].iloc[0])
+            sayings = str(g["speaker_transcript"].iloc[0])
+            emotion = str(g["speaker_emotion"].iloc[0])
             gid = (key if not isinstance(key, tuple) else key[0]) if key_by == "group_id" else f"{sayings}__{emotion}"
 
             # audio codes

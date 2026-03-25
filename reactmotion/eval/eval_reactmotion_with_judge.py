@@ -1,38 +1,38 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-eval/eval_gen_dump_using_scorer.py
+eval/eval_reactmotion_with_judge.py
 
-✅ 对齐 train/train_scorer.py 的 scorer（JudgeNetwork），减少 NaN/Inf
-✅ Strict-L2 缺失注入（和 eval_unified_scorer_strictL2 一致）：
-    - no text  -> text_input_ids 全 pad, attention_mask 全 0
-    - no audio -> audio_codes 全 pad_id, audio_pad_mask 全 True
+Aligned with the scorer (JudgeNetwork) from train/train_scorer.py, reduces NaN/Inf
+Strict-L2 missing-modality injection (consistent with eval_unified_scorer_strictL2):
+    - no text  -> text_input_ids all pad, attention_mask all 0
+    - no audio -> audio_codes all pad_id, audio_pad_mask all True
     - no emo   -> emotion_ids = <unk>
-✅ motion all-pad / empty 序列修复：强制至少 1 token，避免 AttentionPooling softmax 全 mask -> NaN
-✅ 支持 cond_head: fused/text/audio/emo
-✅ 输出：
-  1) scores.jsonl / scores.csv（每条 gen 样本打分）
-  2) best_gen_per_group.csv（每个 group 选 best gen）
-  3) group_metrics.csv（gen vs {gold,silver,neg} 的 win / gen@k / ndcg@k 等）
-✅ Win 统一为 mean(gen) > mean(ref)：mean(gen)>mean(gold/silver/neg)
+Motion all-pad / empty sequence fix: forces at least 1 token to avoid AttentionPooling softmax all-mask -> NaN
+Supports cond_head: fused/text/audio/emo
+Output:
+  1) scores.jsonl / scores.csv (per generated sample scores)
+  2) best_gen_per_group.csv (best gen per group)
+  3) group_metrics.csv (gen vs {gold,silver,neg} win / gen@k / ndcg@k etc.)
+Win unified as mean(gen) > mean(ref): mean(gen)>mean(gold/silver/neg)
 
-【IMPORTANT】
-- gen_dump 格式差异很大，本脚本做了多种字段兼容：
-    必需至少能拿到：
-      - group key（group_id 或 sayings+emotion）
-      - mode（a/t/t+a/... 可缺省，缺省用 args.fixed_mode 或 "t"）
-      - motion token（motion_codes(list/int) 或 motion_npy_path / vq_path）
-    条件信息：
-      - sayings (text), emotion (emo), audio_code_path (npz/npy) 可选
-- 如果你的 gen_dump 字段名不同：改一下 `parse_gen_item()` 里 mapping 即可。
+[IMPORTANT]
+- gen_dump formats vary widely; this script handles multiple field name variants:
+    At minimum must be able to extract:
+      - group key (group_id or sayings+emotion)
+      - mode (a/t/t+a/... can be absent, defaults to args.fixed_mode or "t")
+      - motion token (motion_codes(list/int) or motion_npy_path / vq_path)
+    Condition info:
+      - sayings (text), emotion (emo), audio_code_path (npz/npy) are optional
+- If your gen_dump field names differ: modify the mapping in `parse_gen_item()`.
 
 Usage:
 python eval/eval_gen_dump_using_scorer.py \
   --ckpt /path/to/best.pt \
   --gen_dump /path/to/gen_dump.jsonl \
   --pairs_csv /path/to/pairs.csv \
-  --dataset_dir /ibex/project/.../dataset/A2R \
-  --audio_code_dir /ibex/project/.../audio_codes \
+  --dataset_dir /path/to/dataset \
+  --audio_code_dir /path/to/dataset/audio_codes \
   --out_dir /path/to/out \
   --cond_head fused \
   --fixed_mode "" \
@@ -507,15 +507,15 @@ def build_ref_groups(
     """
     import random
     df = read_split_csv(pairs_csv, split).copy()
-    need_cols = ["label", "sayings", "emotion", "raw_file_name", "generated_wav_name"]
+    need_cols = ["tier_label", "speaker_transcript", "speaker_emotion", "motion_id", "speaker_audio_wav"]
     missing = [c for c in need_cols if c not in df.columns]
     if missing:
         raise RuntimeError(f"Missing columns in csv: {missing}. Found: {list(df.columns)}")
 
-    df["label_c"] = df["label"].apply(canon_label)
-    df["sayings"] = df["sayings"].map(normalize_text)
-    df["emotion"] = df["emotion"].astype(str).fillna("").str.strip()
-    df["audio_stem"] = df["generated_wav_name"].map(clean_audio_stem)
+    df["label_c"] = df["tier_label"].apply(canon_label)
+    df["sayings"] = df["speaker_transcript"].map(normalize_text)
+    df["emotion"] = df["speaker_emotion"].astype(str).fillna("").str.strip()
+    df["audio_stem"] = df["speaker_audio_wav"].map(clean_audio_stem)
 
     vq_dir = pjoin(dataset_dir, "HumanML3D", "VQVAE")
     vq_by_mid = index_vq_dir(vq_dir)
@@ -525,7 +525,7 @@ def build_ref_groups(
         mid = x.split("_", 1)[0] if x else ""
         return str(mid).zfill(6) if mid else ""
 
-    df["motion_id"] = df["raw_file_name"].apply(motion_id_from_raw)
+    df["motion_id"] = df["motion_id"].apply(motion_id_from_raw)
 
     gb = df.groupby(["group_id"], dropna=False) if key_by == "group_id" and "group_id" in df.columns \
         else df.groupby(["sayings", "emotion"], dropna=False)
@@ -933,9 +933,9 @@ def main():
     gid2 = df_split.groupby("group_id").head(1).set_index("group_id")
     args._gid2cond = {
         gid: {
-            "sayings": normalize_text(row["sayings"]),
-            "emotion": str(row["emotion"]).strip(),
-            "audio_stem": clean_audio_stem(row["generated_wav_name"]),
+            "sayings": normalize_text(row["speaker_transcript"]),
+            "emotion": str(row["speaker_emotion"]).strip(),
+            "audio_stem": clean_audio_stem(row["speaker_audio_wav"]),
         }
         for gid, row in gid2.iterrows()
     }
@@ -952,7 +952,7 @@ def main():
     if emo2id is None:
         df_tr = read_split_csv(args.pairs_csv, "train")
         df_va = read_split_csv(args.pairs_csv, "val")
-        emos = sorted(set([str(x).strip().lower() for x in list(df_tr["emotion"]) + list(df_va["emotion"]) if str(x).strip()]))
+        emos = sorted(set([str(x).strip().lower() for x in list(df_tr["speaker_emotion"]) + list(df_va["speaker_emotion"]) if str(x).strip()]))
         emo2id = {"<unk>": 0}
         for e in emos:
             if e not in emo2id:

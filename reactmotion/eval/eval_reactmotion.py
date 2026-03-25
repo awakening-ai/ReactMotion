@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-export_a2rm_gen_dump_match_train.py
+eval/eval_reactmotion.py
 
 Generation-only exporter that MATCHES your training pipeline:
 
@@ -292,7 +292,7 @@ def main():
         txt = cap_tok.decode(out[0], skip_special_tokens=True).strip().strip('"')
         return txt
 
-    # diversity presets (same idea as you原脚本)
+    # diversity presets (same idea as the original script)
     diversity_presets = [
         {"temperature": 0.85, "top_p": 0.95, "top_k": args.gen_top_k},
         {"temperature": 1.05, "top_p": 0.90, "top_k": max(50, args.gen_top_k // 2)},

@@ -2,13 +2,24 @@
 set -euo pipefail
 
 # =========================
+# Joint ReactMotion + T2M Training
+# =========================
+# This script trains ReactMotion (speaker utterance → listener motion)
+# jointly with Text-to-Motion (HumanML3D caption → motion).
+# T2M samples are reformulated as dialogue prompts and share the
+# same PROMPT_V3 template. Ratio: ~33% T2M, ~67% ReactMotion.
+
+# =========================
 # Paths (edit these)
 # =========================
-DATASET_DIR="/path/to/dataset_dir"
+DATASET_DIR="/path/to/dataset"
 PAIRS_DIR="./reactmotion/data"                       # dir with train.csv / val.csv / test.csv
-AUDIO_CODE_DIR="/path/to/audio_code/"
+AUDIO_CODE_DIR="/path/to/audio_code"
 MODEL_NAME="google-t5/t5-base"
-OUTPUT_DIR="./output/reactmotion"
+OUTPUT_DIR="./output/joint_reactmotion_t2m"
+
+# HumanML3D directory (default: ${DATASET_DIR}/HumanML3D)
+HUMANML3D_DIR="${DATASET_DIR}/HumanML3D"
 
 # =========================
 # Conditioning mode (pick one)
@@ -19,6 +30,12 @@ COND_MODE="${1:-t+a+e}"    # t | a | t+e | a+e | t+a | t+a+e
 # Loss type
 # =========================
 LOSS_TYPE="${2:-multi_ce_rank}"  # multi_ce_rank | ce | multi_ce | rank
+
+# =========================
+# T2M co-training settings
+# =========================
+T2M_RATIO=0.33             # 33% T2M, 67% ReactMotion
+T2M_LOSS_WEIGHT=1.0        # Weight for T2M loss
 
 # =========================
 # Train knobs
@@ -69,7 +86,7 @@ IFW_FLAGS=""
 # wandb
 WANDB_MODE="disabled"    # online | offline | disabled
 WANDB_PROJECT="ReactMotion"
-WANDB_TAGS="ReactMotion,${LOSS_TYPE},cond=${COND_MODE}"
+WANDB_TAGS="ReactMotion,JointT2M,${LOSS_TYPE},cond=${COND_MODE}"
 
 # =========================
 # Auto-infer flags from COND_MODE
@@ -92,10 +109,13 @@ mkdir -p "${OUTPUT_DIR}"
 # Run
 # =========================
 echo "======================================================="
-echo "[Train ReactMotion]"
-echo "  cond_mode  = ${COND_MODE}"
-echo "  loss_type  = ${LOSS_TYPE}"
-echo "  output_dir = ${OUTPUT_DIR}"
+echo "[Train Joint ReactMotion + T2M]"
+echo "  cond_mode    = ${COND_MODE}"
+echo "  loss_type    = ${LOSS_TYPE}"
+echo "  t2m_ratio    = ${T2M_RATIO}"
+echo "  t2m_weight   = ${T2M_LOSS_WEIGHT}"
+echo "  humanml3d    = ${HUMANML3D_DIR}"
+echo "  output_dir   = ${OUTPUT_DIR}"
 echo "======================================================="
 
 python -m reactmotion.train.train_reactmotion \
@@ -133,6 +153,10 @@ python -m reactmotion.train.train_reactmotion \
   --group_w_agg "${GROUP_W_AGG}" \
   --group_w_clip_min "${GROUP_W_CLIP_MIN}" \
   --group_w_clip_max "${GROUP_W_CLIP_MAX}" \
+  --enable_t2m \
+  --t2m_ratio "${T2M_RATIO}" \
+  --t2m_loss_weight "${T2M_LOSS_WEIGHT}" \
+  --humanml3d_dir "${HUMANML3D_DIR}" \
   --auto_resume \
   --do_eval \
   --eval_steps "${EVAL_STEPS}" \
@@ -142,5 +166,5 @@ python -m reactmotion.train.train_reactmotion \
   --wandb_tags "${WANDB_TAGS}"
 
 echo "======================================================="
-echo "[Done] ${COND_MODE} (${LOSS_TYPE}) -> ${OUTPUT_DIR}"
+echo "[Done] Joint ${COND_MODE} (${LOSS_TYPE}) -> ${OUTPUT_DIR}"
 echo "======================================================="

@@ -1,4 +1,4 @@
-# train/callback_diversity_simple.py
+# train/callback_diversity_eval.py
 import numpy as np
 import torch
 from transformers import TrainerCallback
@@ -106,7 +106,7 @@ class DiversitySimpleCallback(TrainerCallback):
             # gen: [B*R, T]
             gen = gen.detach().cpu().tolist()
 
-            # 先把每条 gen 变成 signature
+            # convert each generated sequence to a signature
             sigs = []
             for ids in gen:
                 sig = _seq_signature(
@@ -120,7 +120,7 @@ class DiversitySimpleCallback(TrainerCallback):
                 all_token_seqs.append(list(sig))
 
             # ---- within-query stats ----
-            # HF generate 会把同一个 input 的 R 个结果放在一起（默认分组顺序）
+            # HF generate groups R results for the same input together (default grouping order)
             # shape: [B, R]
             if len(sigs) == B * R:
                 for b in range(B):

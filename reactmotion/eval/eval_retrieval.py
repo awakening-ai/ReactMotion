@@ -1,39 +1,37 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-eval_retrieval.py
+eval/eval_retrieval.py
 
-检索式 listener motion 生成 baseline 评估
-对每个 test 样本，在 train set 全部 listener motions 里检索相似度最高的一条作为预测，
-再用 EvaluatorModelWrapper 计算 FID & Diversity。
+Retrieval-based listener motion generation baseline evaluation.
+For each test sample, retrieves the most similar motion from the full train set as the prediction,
+then computes FID & Diversity using EvaluatorModelWrapper.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Method 1: eval_wrapper
-  - 用 EvaluatorModelWrapper 里的 TextEncoderBiGRUCo (GloVe+POS 特征)
-    把 speaker sayings 编码到和 motion encoder 相同的共嵌入空间
-  - 构建 train motion embedding bank
-  - 余弦相似度 → top-1
-  需要: --glove_dir (默认 ./glove) 和 spacy en_core_web_sm
+  - Uses TextEncoderBiGRUCo (GloVe+POS features) from EvaluatorModelWrapper
+    to encode speaker sayings into the same co-embedding space as the motion encoder
+  - Builds train motion embedding bank
+  - Cosine similarity -> top-1
+  Requires: --glove_dir (default ./glove) and spacy en_core_web_sm
 
 Method 2: scorer
-  - 加载训练好的 JudgeNetwork
-  - 支持多个 conditioning 模式: t | t+e | a | a+e | t+a+e
-  - 预先把 train 所有 motion codes 编码成 motion embedding bank
-  - 对每个 test 样本，encode condition → cosine sim → top-1
-  需要: --scorer_ckpt
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  - Loads a trained JudgeNetwork
+  - Supports multiple conditioning modes: t | t+e | a | a+e | t+a+e
+  - Pre-encodes all train motion codes into a motion embedding bank
+  - For each test sample: encode condition -> cosine sim -> top-1
+  Requires: --scorer_ckpt
 
-FID & Diversity: 检索出的 motion → VQ-VAE 解码 → EvaluatorModelWrapper embedding → FID vs real
+FID & Diversity: retrieved motion -> VQ-VAE decode -> EvaluatorModelWrapper embedding -> FID vs real
 
-示例:
+Examples:
 
 # Method 1
 python -m eval.eval_retrieval \\
   --method eval_wrapper \\
-  --dataset_dir /ibex/project/c2191/luoc/dataset/A2R \\
+  --dataset_dir /path/to/dataset \\
   --pairs_csv ./new_data \\
   --t2m_opt ./checkpoints/t2m/Comp_v6_KLD005/opt.txt \\
-  --vqvae_ckpt /ibex/project/c2191/luoc/backup/sub-a/code_for_a2rm/motion_VQVAE/net_last.pth \\
+  --vqvae_ckpt /path/to/motion_VQVAE/net_last.pth \\
   --glove_dir ./glove \\
   --mean_path /path/mean.npy --std_path /path/std.npy
 
@@ -41,12 +39,12 @@ python -m eval.eval_retrieval \\
 python -m eval.eval_retrieval \\
   --method scorer \\
   --cond_modes t t+e a a+e t+a+e \\
-  --dataset_dir /ibex/project/c2191/luoc/dataset/A2R \\
+  --dataset_dir /path/to/dataset \\
   --pairs_csv ./new_data \\
   --t2m_opt ./checkpoints/t2m/Comp_v6_KLD005/opt.txt \\
-  --vqvae_ckpt /ibex/.../net_last.pth \\
-  --scorer_ckpt /ibex/.../best.pt \\
-  --audio_code_dir /ibex/project/c2191/luoc/dataset/A2R/audio-codes \\
+  --vqvae_ckpt /path/to/motion_VQVAE/net_last.pth \\
+  --scorer_ckpt /path/to/checkpoints/scorer/best.pt \\
+  --audio_code_dir /path/to/dataset/audio-codes \\
   --mean_path /path/mean.npy --std_path /path/std.npy
 """
 
@@ -64,9 +62,10 @@ from scipy import linalg
 from scipy.spatial.distance import pdist
 from tqdm import tqdm
 
-from external.T2M_GPT.options.get_eval_option import get_opt
-from models.evaluator_wrapper import EvaluatorModelWrapper
-import models.vqvae as vqvae_module
+from reactmotion.options.get_eval_option import get_opt
+from reactmotion.models.evaluator_wrapper import EvaluatorModelWrapper
+import reactmotion.models.vqvae as vqvae_module
+
 
 
 # ─────────────────────────────────────────────────────────────
@@ -119,7 +118,7 @@ def read_csv_split(pairs_csv: str, split: str) -> pd.DataFrame:
 def unique_motion_rows(df: pd.DataFrame) -> pd.DataFrame:
     """One row per unique motion_id (dedup listener motions)."""
     df = df.copy()
-    df["_mid"] = df["raw_file_name"].apply(motion_id_from_raw)
+    df["_mid"] = df["motion_id"].apply(motion_id_from_raw)
     df = df[df["_mid"] != "000000"].copy()
     return df.drop_duplicates("_mid").reset_index(drop=True)
 
@@ -859,9 +858,9 @@ def main():
                     help="[eval_wrapper] GloVe dir with our_vab_*.npy/pkl")
 
     # Normalization
-    ap.add_argument("--mean_path", default='home/luoc/hub/luoc/projects/audio2reactivemotion/reactmotion/external/T2M_GPT/checkpoints/t2m/VQVAEV3_CB1024_CMT_H1024_NRES3/meta/mean.npy ',
+    ap.add_argument("--mean_path", default='/path/to/T2M_GPT/checkpoints/t2m/VQVAEV3_CB1024_CMT_H1024_NRES3/meta/mean.npy',
                     help="mean.npy for joint vector normalization")
-    ap.add_argument("--std_path",  default='/home/luoc/hub/luoc/projects/audio2reactivemotion/reactmotion/external/T2M_GPT/checkpoints/t2m/VQVAEV3_CB1024_CMT_H1024_NRES3/meta/std.npy ',
+    ap.add_argument("--std_path",  default='/path/to/T2M_GPT/checkpoints/t2m/VQVAEV3_CB1024_CMT_H1024_NRES3/meta/std.npy',
                     help="std.npy for joint vector normalization")
 
     # Audio (scorer method)
@@ -955,7 +954,7 @@ def main():
 
         # Encode test sayings with T2M GloVe text encoder
         # Falls back to CLIP if spacy/GloVe unavailable
-        test_sayings = test_uniq["sayings"].apply(normalize_text_field).tolist()
+        test_sayings = test_uniq["speaker_transcript"].apply(normalize_text_field).tolist()
         query_emb = _encode_test_texts(
             test_sayings, eval_wrapper, args.glove_dir, bank_emb.shape[1], device
         )
@@ -1012,9 +1011,9 @@ def main():
         test_rows = []
         for _, r in test_uniq.iterrows():
             test_rows.append({
-                "sayings":            normalize_text_field(r.get("sayings", "")),
-                "emotion":            str(r.get("emotion", "")),
-                "generated_wav_name": str(r.get("generated_wav_name", "")
+                "sayings":            normalize_text_field(r.get("speaker_transcript", "")),
+                "emotion":            str(r.get("speaker_emotion", "")),
+                "generated_wav_name": str(r.get("speaker_audio_wav", "")
                                           or r.get("audio_stem", "")),
                 "_mid":               r["_mid"],
             })

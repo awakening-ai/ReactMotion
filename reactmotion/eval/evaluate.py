@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-evaluate.py — Unified evaluation entry point for ReactMotion.
+eval/evaluate.py — Unified evaluation entry point for ReactMotion.
 
 Two evaluation pipelines:
   1) Win-rate / Gen@3 / nDCG:  generate motion candidates, then score with JudgeNetwork

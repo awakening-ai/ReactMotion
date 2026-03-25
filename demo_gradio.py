@@ -9,9 +9,9 @@ Interactive web UI for generating reactive listener motions.
 Usage:
   python demo_gradio.py \
     --gen_ckpt  logs/checkpoints/checkpoint-XXXXX \
-    --vqvae_ckpt models/VQVAE/net_best_fid.bin \
-    --mean_path  data/HumanML3D/mean.npy \
-    --std_path   data/HumanML3D/std.npy \
+    --vqvae_ckpt external/pretrained_vqvae/t2m.pth \
+    --mean_path  external/t2m/VQVAEV3_CB1024_CMT_H1024_NRES3/meta/mean.npy \
+    --std_path   external/t2m/VQVAEV3_CB1024_CMT_H1024_NRES3/meta/std.npy \
     --port 7860
 
 Then open http://localhost:7860 in your browser.

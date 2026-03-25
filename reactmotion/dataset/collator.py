@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# # reactmotion.dataset.collator
+# reactmotion.dataset.collator
 import random
 import numpy as np
 import torch

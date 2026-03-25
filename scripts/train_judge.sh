@@ -4,9 +4,9 @@ set -euo pipefail
 # =========================
 # Paths (edit these)
 # =========================
-DATASET_DIR="/ibex/project/c2191/luoc/dataset/A2R"
+DATASET_DIR="/path/to/dataset"
 PAIRS_DIR="./reactmotion/data"                       # dir with train.csv / val.csv / test.csv
-AUDIO_CODE_DIR="/ibex/project/c2191/luoc/dataset/A2R/audio-raws-09-01-2026-code"
+DATASET_DIR="/path/to/audio_code"
 SAVE_DIR="./output/judge"
 KEY_BY="group_id"
 

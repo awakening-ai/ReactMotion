@@ -11,9 +11,9 @@ Usage examples:
   # Text-only (speaker transcription)
   python demo_inference.py \
     --gen_ckpt  logs/checkpoints/checkpoint-XXXXX \
-    --vqvae_ckpt models/VQVAE/net_best_fid.bin \
-    --mean_path  data/HumanML3D/mean.npy \
-    --std_path   data/HumanML3D/std.npy \
+    --vqvae_ckpt external/pretrained_vqvae/t2m.pth \
+    --mean_path  external/t2m/VQVAEV3_CB1024_CMT_H1024_NRES3/meta/mean.npy \
+    --std_path   external/t2m/VQVAEV3_CB1024_CMT_H1024_NRES3/meta/std.npy \
     --text "I just saw a shooting star streak across the sky! Did you see it too?" \
     --emotion "excited" \
     --out_path outputs/demo_text.mp4
@@ -21,9 +21,9 @@ Usage examples:
   # Audio input (wav file, encoded with Mimi)
   python demo_inference.py \
     --gen_ckpt  logs/checkpoints/checkpoint-XXXXX \
-    --vqvae_ckpt models/VQVAE/net_best_fid.bin \
-    --mean_path  data/HumanML3D/mean.npy \
-    --std_path   data/HumanML3D/std.npy \
+    --vqvae_ckpt external/pretrained_vqvae/t2m.pth \
+    --mean_path  external/t2m/VQVAEV3_CB1024_CMT_H1024_NRES3/meta/mean.npy \
+    --std_path   external/t2m/VQVAEV3_CB1024_CMT_H1024_NRES3/meta/std.npy \
     --audio  samples/speaker.wav \
     --cond_mode a+e --emotion "happy" \
     --out_path outputs/demo_audio.mp4
@@ -31,9 +31,9 @@ Usage examples:
   # Text + Audio
   python demo_inference.py \
     --gen_ckpt  logs/checkpoints/checkpoint-XXXXX \
-    --vqvae_ckpt models/VQVAE/net_best_fid.bin \
-    --mean_path  data/HumanML3D/mean.npy \
-    --std_path   data/HumanML3D/std.npy \
+    --vqvae_ckpt external/pretrained_vqvae/t2m.pth \
+    --mean_path  external/t2m/VQVAEV3_CB1024_CMT_H1024_NRES3/meta/mean.npy \
+    --std_path   external/t2m/VQVAEV3_CB1024_CMT_H1024_NRES3/meta/std.npy \
     --text "Let's celebrate!" --audio samples/speaker.wav \
     --cond_mode t+a+e --emotion "happy" \
     --out_path outputs/demo_fused.mp4
