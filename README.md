@@ -34,7 +34,7 @@
 *We introduce **Reactive Listener Motion Generation from Speaker Utterance** — a new task that generates naturalistic listener body motions appropriately responding to a speaker's utterance. Our unified framework **ReactMotion** jointly models text, audio, emotion, and motion with preference-based objectives, producing natural, diverse, and appropriate listener responses.*
 
 ## 📢 Updates
-- \[2026.??\] 🎮 **We will release the ReactMotionNet dataset on huggingface very soon** 
+
 - \[2026.03.17\] 🎮 **Inference Demo & Gradio UI** released
 - \[2026.03.16\] 🎯 **Full Training, Evaluation Code** released
 
@@ -145,16 +145,28 @@ dataset/HumanML3D/VQVAE/
 
 Each `.npy` file contains a 1D integer array of VQ codebook indices (codebook size = 512).
 
-### Audio Codes
+### Speaker Audio
 
-Pre-encode speaker audio with [Mimi](https://github.com/kyutai-labs/moshi) (from the Moshi project). Mimi weights are **automatically downloaded** from HuggingFace on first use — no manual checkpoint needed.
+We provide both pre-extracted Mimi code indices and raw wav files:
+
+| Resource | Description | Link |
+|---|---|---|
+| **Audio Codes** | Mimi encoder code indices (`.npz`) | [Google Drive](https://drive.google.com/drive/folders/1FVbEp13IQp95L6W0--mbPAx4os7TQnBA?usp=sharing) |
+| **Audio Raw** | Raw speaker wav files (`.wav`) | [Google Drive](https://drive.google.com/drive/folders/1u9TT1mbeQyoWvhmgO3BNmlHMSwVriplr?usp=sharing) |
+
+Download and place them under your dataset directory:
 
 ```
-{AUDIO_CODE_DIR}/
-├── audio_001.npz
-├── audio_002.npz
-└── ...
+{DATASET_DIR}/
+├── audio_code/   # Mimi code indices (for audio_mode=code)
+│   ├── 001193_1_reaction_fearful_4.npz
+│   └── ...
+└── audio_wav/    # Raw speaker wav (for audio_mode=wav)
+    ├── 001193_1_reaction_fearful_4.wav
+    └── ...
 ```
+
+The audio codes are pre-extracted using [Mimi](https://github.com/kyutai-labs/moshi) (from the Moshi project). Mimi weights are **automatically downloaded** from HuggingFace on first use if you want to re-encode from raw wav.
 
 ### CSV Splits
 
@@ -163,36 +175,41 @@ Prepare `train.csv`, `val.csv`, `test.csv` with the following columns:
 | Column | Description |
 |---|---|
 | `group_id` | Unique group identifier |
-| `label` | Sample quality: `gold` / `silver` / `neg` |
-| `sayings` | Speaker transcription |
-| `emotion` | Speaker emotion label |
-| `file_name` | Motion file ID prefix |
-| `generated_wav_name` | Audio file stem |
-| `item_w` *(optional)* | Per-item weight |
-| `group_w` *(optional)* | Per-group weight |
+| `item_id` | Unique item identifier |
+| `tier_label` | Sample quality tier: `gold` / `silver` / `neg` |
+| `speaker_transcript` | Speaker transcription text |
+| `speaker_emotion` | Speaker emotion label |
+| `listener_motion_caption` | Text description of the listener motion |
+| `motion_id` | Motion file ID (6-digit zero-padded, e.g. `000267`) |
+| `speaker_audio_wav` | Audio file stem (maps to audio code/wav files) |
+| `group_w` *(optional)* | Per-group weight for weighted training |
 
 ## 🤗 Model Card
 
-Our pretrained ReactMotion model is available on Hugging Face:
+Our pretrained models are available on Hugging Face:
 
-| Model | Backbone | Conditioning | Link |
+| Model | Backbone | Description | Link |
 |---|---|---|---|
-| **ReactMotion 1.0** | T5-base | Text + Audio + Emotion | [awakening-ai/ReactMotion1.0](https://huggingface.co/awakening-ai/ReactMotion1.0) |
-| **ReactMotion1.0 Joint-Training** | T5-base | Text + Audio + Emotion | [awakening-ai/ReactMotion1.0-Joint-Training](https://huggingface.co/awakening-ai/awakening-ai/ReactMotion1.0-Joint-Training) |
+| **ReactMotion 1.0** | T5-base | Generator (Text + Audio + Emotion → Motion) | [awakening-ai/ReactMotion1.0](https://huggingface.co/awakening-ai/ReactMotion1.0) |
+| **ReactMotion-Judge** | T5 text enc + Mimi audio enc | Multi-modal judge network for best-of-K selection | [awakening-ai/ReactMotion-Judge](https://huggingface.co/awakening-ai/ReactMotion-Judge) |
 
 Download via CLI:
 ```bash
 # Install huggingface_hub if needed
 pip install huggingface_hub
 
-# Download the model
+# Download the generator
 huggingface-cli download awakening-ai/ReactMotion1.0 --local-dir models/ReactMotion1.0
+
+# Download the judge network
+huggingface-cli download awakening-ai/ReactMotion-Judge --local-dir models/ReactMotion-Judge
 ```
 
 Or in Python:
 ```python
 from huggingface_hub import snapshot_download
 snapshot_download(repo_id="awakening-ai/ReactMotion1.0", local_dir="models/ReactMotion1.0")
+snapshot_download(repo_id="awakening-ai/ReactMotion-Judge", local_dir="models/ReactMotion-Judge")
 ```
 
 ## ⚡ Quick Demo
@@ -214,11 +231,7 @@ python demo_inference.py \
   --out_path output/demo_text_meet.mp4
 ```
 
-
 The generated videos will be saved in `output/`, example shown below:
-
-https://github.com/user-attachments/assets/e0096715-f8b9-400c-8dd8-434d1e10c8d4
-
 
 <!-- TODO: add demo video/gif here -->
 <!-- <p align="center">
@@ -252,7 +265,6 @@ python demo_inference.py \
   --cond_mode a+e --emotion "happy" \
   --out_path output/demo_audio.mp4
 ```
-
 
 **Batch demo with shell script:**
 ```bash
@@ -307,13 +319,11 @@ python -m reactmotion.train.train_reactmotion \
   --output_dir /path/to/output \
   --cond_mode t+a+e \
   --audio_mode code \
-  --audio_code_dir /path/to/audio_codes \
+  --audio_code_dir /path/to/audio_code \
   --batch_size 8 \
   --learning_rate 5e-5 \
   --max_steps 100000
 ```
-
-We used 1 A100 GPU for training, which takes about 7 hours. The checkpoints will be saved in `logs/<WANDB_RUN_ID>/checkpoints/`.
 
 <details>
 <summary>Key training hyperparameters</summary>
@@ -343,7 +353,7 @@ Or run directly:
 python -m reactmotion.train.train_judge \
   --dataset_dir /path/to/dataset \
   --pairs_csv /path/to/data \
-  --audio_code_dir /path/to/audio_codes \
+  --audio_code_dir /path/to/audio_code \
   --save_dir /path/to/output \
   --batch_size 16 \
   --epochs 50
@@ -474,14 +484,11 @@ This project builds upon the following amazing open-source projects:
 ## 📄 Citation
 
 ```bibtex
-@misc{luo2026reactmotiongeneratingreactivelistener,
-      title={ReactMotion: Generating Reactive Listener Motions from Speaker Utterance}, 
-      author={Cheng Luo and Bizhu Wu and Bing Li and Jianfeng Ren and Ruibin Bai and Rong Qu and Linlin Shen and Bernard Ghanem},
-      year={2026},
-      eprint={2603.15083},
-      archivePrefix={arXiv},
-      primaryClass={cs.CV},
-      url={https://arxiv.org/abs/2603.15083}, 
+@article{luo2026reactmotion,
+  title={ReactMotion: Generating Reactive Listener Motions from Speaker Utterance},
+  author={Luo, Cheng and Wu, Bizhu and Li, Bing and Ren, Jianfeng and Bai, Ruibin and Qu, Rong and Shen, Linlin and Ghanem, Bernard},
+  journal={arXiv preprint arXiv:2603.15083},
+  year={2026}
 }
 ```
 
