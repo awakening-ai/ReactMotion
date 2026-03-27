@@ -119,7 +119,7 @@ def normalize_mode(m: str) -> str:
 
 def build_group_key(item: Dict[str, Any], key_by: str) -> str:
     if key_by == "group_id":
-        gid = safe_get(item, ["group_id", "key", "gid", "groupKey", "group"], "")
+        gid = safe_get(item, ["group_id", "key", "group_key", "gid", "groupKey", "group"], "")
         return str(gid)
 
     # sayings_emotion
@@ -221,13 +221,21 @@ class GenDumpDataset(Dataset):
                 obj = json.loads(line)
 
                 # group-level
-                g_mode = normalize_mode(obj.get("cond_mode", "")) or (args.fixed_mode or "t")
-                g_key  = str(obj.get("key", "") or obj.get("group_id", "") or "").strip()  # group_id
+                g_mode = normalize_mode(obj.get("cond_mode", "") or obj.get("mode", "")) or (args.fixed_mode or "t")
+                g_key  = str(obj.get("key", "") or obj.get("group_id", "") or obj.get("group_key", "") or "").strip()
                 if not g_key:
                     g_key = str(obj.get("group_hash", "")).strip()
 
                 items = obj.get("items", [])
                 if not isinstance(items, list) or len(items) == 0:
+                    # flat format: each line is a single sample (no "items" wrapper)
+                    raw = dict(obj)
+                    raw["mode"] = g_mode
+                    raw["group_id"] = g_key
+                    raw["idx_in_group"] = 0
+                    it = parse_gen_item(raw, args)
+                    it["idx"] = len(self.items)
+                    self.items.append(it)
                     continue
 
                 for j, it0 in enumerate(items):
@@ -645,10 +653,15 @@ def compute_group_metrics(
     rg_map = {g["group_key"]: g for g in ref_groups}
 
     rows = []
+    miss_count = 0
 
     for _, r in tqdm(best_gen_df.iterrows(), total=len(best_gen_df), desc="group_metrics", leave=False):
         gk = str(r["group_key"])
         if gk not in rg_map:
+            if miss_count < 3:
+                rg_sample = list(rg_map.keys())[:5]
+                print(f"[DEBUG] group_key mismatch: gen gk={gk!r}, ref sample keys={rg_sample}")
+            miss_count += 1
             continue
         g = rg_map[gk]
 
@@ -866,6 +879,9 @@ def compute_group_metrics(
             best_motion_len=int(r.get("best_motion_len", -1)),
         ))
 
+    if miss_count:
+        print(f"[WARN] {miss_count}/{len(best_gen_df)} gen groups not found in ref_groups")
+
     out = pd.DataFrame(rows)
     return out
 
@@ -1046,7 +1062,7 @@ def main():
     df_scores["mode_norm"] = df_scores["mode"].map(lambda x: normalize_mode(str(x)) or "t")
     grp_cols = ["mode_norm", "group_key"]
     df_best = df_scores.sort_values("score", ascending=False).groupby(grp_cols, as_index=False).head(1).copy()
-    df_best = df_best.rename(columns={"mode_norm": "mode"})
+    df_best = df_best.drop(columns=["mode"], errors="ignore").rename(columns={"mode_norm": "mode"})
 
     best_dir = pjoin(args.out_dir, "best_motion_npy")
     os.makedirs(best_dir, exist_ok=True)

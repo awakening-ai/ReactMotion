@@ -199,9 +199,18 @@ def _collect_code_paths(gen_root: str, gen_format: str):
         gen_root/tokens/<key>/m*.npy   (or gen_root/<key>/m*.npy if already inside tokens/)
     """
     if gen_format == "eval_dump":
+        # Support both flat (gen_root/group=*/) and nested (gen_root/cond=*/ckpt=*/group=*/)
         group_dirs = sorted(glob.glob(os.path.join(gen_root, "group=*")))
         if not group_dirs:
-            raise RuntimeError(f"[eval_dump] No group=* dirs found under {gen_root}")
+            group_dirs = sorted(glob.glob(os.path.join(gen_root, "*", "*", "group=*")))
+        if not group_dirs:
+            group_dirs = sorted(glob.glob(os.path.join(gen_root, "*", "group=*")))
+        if not group_dirs:
+            raise RuntimeError(
+                f"[eval_dump] No group=* dirs found under {gen_root}\n"
+                f"  Searched: group=*, */*/group=*, */group=*\n"
+                f"  Contents: {os.listdir(gen_root) if os.path.isdir(gen_root) else 'NOT A DIR'}"
+            )
         paths = []
         for gdir in group_dirs:
             paths.extend(sorted(glob.glob(os.path.join(gdir, "*.motion_codes.npy"))))

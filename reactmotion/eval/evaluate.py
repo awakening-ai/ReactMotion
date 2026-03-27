@@ -118,6 +118,31 @@ def run_winrate(args):
         print(f"[ERROR] Judge scoring failed with code {ret.returncode}")
         return
 
+    # Print summary from group_metrics.csv
+    metrics_csv = os.path.join(judge_out, "group_metrics.csv")
+    if os.path.isfile(metrics_csv):
+        try:
+            import pandas as pd
+            df = pd.read_csv(metrics_csv)
+            if len(df) > 0:
+                def _mean(col):
+                    x = pd.to_numeric(df[col], errors="coerce")
+                    return float(x.mean()) if x.notna().any() else float("nan")
+
+                print("=" * 60)
+                print("[Win-rate Results]")
+                print(f"  Groups evaluated: {len(df)}")
+                for col in ["win_gen_vs_neg", "win_gen_vs_silver", "win_gen_vs_gold", "gen_at3", "ndcg5"]:
+                    if col in df.columns:
+                        print(f"  {col:25s} = {_mean(col):.4f}")
+                print("=" * 60)
+            else:
+                print("[WARN] group_metrics.csv is empty — no win-rate metrics computed.")
+        except ImportError:
+            print("[WARN] pandas not available; skipping metrics summary. See:", metrics_csv)
+    else:
+        print("[WARN] group_metrics.csv not found at:", metrics_csv)
+
     print("=" * 60)
     print("[Win-rate pipeline done]")
     print(f"  Gen dump:       {gen_out}")
@@ -163,6 +188,7 @@ def run_fid(args):
 
     print("=" * 60)
     print("[FID/Diversity pipeline done]")
+    print("  (FID & Diversity values printed above by the sub-process)")
     print("=" * 60)
 
 

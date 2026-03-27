@@ -301,14 +301,14 @@ def main():
 
     # index jsonl (group-level) + flat jsonl/csv (sample-level)
     index_path = os.path.join(args.out_dir, f"index_{args.only_split}.jsonl")
-    idx_f = open(index_path, "a", encoding="utf-8")
+    idx_f = open(index_path, "w", encoding="utf-8")
 
     flat_jsonl_path = os.path.join(args.out_dir, f"index_{args.only_split}.flat.jsonl")
-    flat_f = open(flat_jsonl_path, "a", encoding="utf-8")
+    flat_f = open(flat_jsonl_path, "w", encoding="utf-8")
 
     flat_csv_path = os.path.join(args.out_dir, f"index_{args.only_split}.flat.csv")
-    csv_exists = os.path.exists(flat_csv_path) and os.path.getsize(flat_csv_path) > 0
-    csv_f = open(flat_csv_path, "a", encoding="utf-8", newline="")
+    csv_exists = False
+    csv_f = open(flat_csv_path, "w", encoding="utf-8", newline="")
     csv_writer = csv.writer(csv_f)
     if not csv_exists:
         csv_writer.writerow([
