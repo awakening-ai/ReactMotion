@@ -113,6 +113,35 @@ external/
 
 ## 📦 Data Preparation
 
+## ReeactMotionNet
+| Resource | Description | Link |
+|---|---|---|
+| **ReeactMotionNet** | speaker audio codes, raw audio, train.csv, val.csv, and test.csv | [Google Drive](https://drive.google.com/drive/folders/1CcwKMFDq366SqerbrZ8LQoXcacv0phMp?usp=share_link) |
+
+
+Dataset structure:
+```
+dataset
+├── HumanML3D
+├── audio_code
+├── audio_raw
+```
+
+put the train.csv,  val.csv, and test.csv to
+
+```
+reactmotion
+├── reactmotion
+    ├── data
+        ├── train.csv
+        ├── val.csv
+        ├── test.csv
+    ├── dataset
+    ├── eval
+    ├── models
+    ....
+```
+
 ### HumanML3D Dataset
 
 We use the [HumanML3D](https://github.com/EricGuo5513/HumanML3D) 3D human motion-language dataset. Please follow the [HumanML3D instructions](https://github.com/EricGuo5513/HumanML3D) to download and prepare the dataset, then place it under the `dataset/` directory:
