@@ -238,8 +238,8 @@ class ReactMotionNet(Dataset):
         self.audio_mode = str(audio_mode)
         self.audio_token_level = str(audio_token_level)
 
-        self.audio_code_dir = audio_code_dir or pjoin(self.dataset_dir, "audio-raws-09-01-2026-code")
-        self.wav_dir = wav_dir or pjoin(self.dataset_dir, "audio-raws-09-01-2026-wav")
+        self.audio_code_dir = audio_code_dir or pjoin(self.dataset_dir, "audio_code")
+        self.wav_dir = wav_dir or pjoin(self.dataset_dir, "audio_wav")
 
         self.min_gold = int(min_gold)
         self.min_silver = int(min_silver)
